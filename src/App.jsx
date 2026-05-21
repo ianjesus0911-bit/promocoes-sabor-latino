@@ -16,7 +16,7 @@ import {
   tones,
 } from "./data/mockData";
 import { usePersistentState } from "./hooks/usePersistentState";
-import { generateCampaignDayPack } from "./utils/campaignDayGenerator";
+import { generateCampaignDayPack, generateCampaignWeekPlanningPack } from "./utils/campaignDayGenerator";
 import { generateImagePromptPack } from "./utils/imagePromptGenerator";
 import {
   buildManualInstagramInsights,
@@ -76,19 +76,108 @@ const campaignObjectives = [
   "atrair pessoas ao restaurante",
   "vender últimas unidades",
   "divulgar prato do dia",
+  "atrair famílias",
+  "promover comida cubana",
+  "organizar campanhas de terça a domingo",
 ];
 
-const campaignMoments = ["manhã", "almoço", "tarde", "noite"];
+const campaignMoments = ["manhã", "almoço", "almoço familiar", "tarde", "noite"];
 
-const campaignTones = ["urgente", "familiar", "alegre", "direto para vender", "caseiro"];
+const campaignTones = ["urgente", "familiar", "alegre", "direto para vender", "caseiro", "emocional"];
+
+const campaignDayTypes = ["venda do dia", "planejamento da semana"];
 
 const defaultCampaignDayBuilder = {
+  campaignType: "venda do dia",
   product: "almoço",
   objective: "vender pelo WhatsApp",
   moment: "almoço",
   tone: "direto para vender",
   availableQuantity: "",
   deadline: "",
+};
+
+const weekPlannerDays = [
+  { id: "segunda", label: "Segunda", shortLabel: "Seg", jsDay: 1, status: "Fechado" },
+  { id: "terca", label: "Terça", shortLabel: "Ter", jsDay: 2, status: "Aberto" },
+  { id: "quarta", label: "Quarta", shortLabel: "Qua", jsDay: 3, status: "Aberto" },
+  { id: "quinta", label: "Quinta", shortLabel: "Qui", jsDay: 4, status: "Aberto" },
+  { id: "sexta", label: "Sexta", shortLabel: "Sex", jsDay: 5, status: "Aberto" },
+  { id: "sabado", label: "Sábado", shortLabel: "Sáb", jsDay: 6, status: "Aberto" },
+  { id: "domingo", label: "Domingo", shortLabel: "Dom", jsDay: 0, status: "Aberto" },
+];
+
+const mondayPlanningRecommendations = [
+  "Dia ideal para planejar as campanhas da semana.",
+  "Prepare os posts de terça a domingo.",
+  "Revise quais pratos tiveram melhor resultado.",
+  "Organize as promoções da semana.",
+];
+
+const weekDayShortRecommendations = {
+  segunda: "Fechado. Bom dia para planejar a semana.",
+  terca: "Boa para divulgar almoço rápido e caseiro.",
+  quarta: "Bom dia para reforçar almoço e pedidos no WhatsApp.",
+  quinta: "Ótimo dia para aquecer o fim de semana com ofertas.",
+  sexta: "Bom dia para começar a vender pizza à noite.",
+  sabado: "Ideal para campanha familiar ou pizza.",
+  domingo: "Perfeito para comida cubana e almoço em família.",
+};
+
+const getCurrentWeekPlannerDayId = () => {
+  const todayJsDay = new Date().getDay();
+  return weekPlannerDays.find((day) => day.jsDay === todayJsDay)?.id || "terca";
+};
+
+const getCampaignDayDefaultsByWeekDay = (weekDayId, currentMoment = "almoço") => {
+  if (weekDayId === "segunda") {
+    return {
+      campaignType: "planejamento da semana",
+      product: "almoço",
+      objective: "organizar campanhas de terça a domingo",
+      moment: "manhã",
+      tone: "caseiro",
+    };
+  }
+
+  if (weekDayId === "terca" || weekDayId === "quarta" || weekDayId === "quinta") {
+    return {
+      campaignType: "venda do dia",
+      product: "almoço",
+      objective: weekDayId === "quinta" ? "atrair pessoas ao restaurante" : "vender pelo WhatsApp",
+      moment: "almoço",
+      tone: weekDayId === "quarta" ? "direto para vender" : "caseiro",
+    };
+  }
+
+  if (weekDayId === "sexta") {
+    const isNight = currentMoment === "noite";
+    return {
+      campaignType: "venda do dia",
+      product: isNight ? "pizza" : "almoço",
+      objective: "vender pelo WhatsApp",
+      moment: isNight ? "noite" : "almoço",
+      tone: isNight ? "alegre" : "direto para vender",
+    };
+  }
+
+  if (weekDayId === "sabado") {
+    return {
+      campaignType: "venda do dia",
+      product: "pizza",
+      objective: "atrair pessoas ao restaurante",
+      moment: "noite",
+      tone: "alegre",
+    };
+  }
+
+  return {
+    campaignType: "venda do dia",
+    product: "ropa vieja cubana",
+    objective: "atrair famílias",
+    moment: "almoço familiar",
+    tone: "emocional",
+  };
 };
 
 const outputFields = [
@@ -391,11 +480,17 @@ function App() {
     defaultCampaignDayBuilder
   );
   const [campaignDayGenerated, setCampaignDayGenerated] = usePersistentState("promocoes.campanhaDia.generated", null);
+  const [campaignDayWeeklyHistory, setCampaignDayWeeklyHistory] = usePersistentState(
+    "promocoes.campanhaDia.weeklyHistory",
+    []
+  );
   const [instagramPosts, setInstagramPosts] = usePersistentState("promocoes.instagramOfficial.posts", defaultInstagramPosts);
   const [instagramGenerated, setInstagramGenerated] = usePersistentState("promocoes.instagramOfficial.generated", null);
 
   const [inspirationForm, setInspirationForm] = useState(defaultInspirationForm);
   const [instagramManualForm, setInstagramManualForm] = useState(defaultInstagramManualForm);
+  const [campaignDaySelectedWeekDay, setCampaignDaySelectedWeekDay] = useState(() => getCurrentWeekPlannerDayId());
+  const [campaignDayViewedRecord, setCampaignDayViewedRecord] = useState(null);
   const [copiedKey, setCopiedKey] = useState("");
   const [favoriteFeedback, setFavoriteFeedback] = useState("");
   const [imageCopyFeedback, setImageCopyFeedback] = useState("");
@@ -454,6 +549,38 @@ function App() {
     "@saborlatinobassano";
   const officialInstagramUsername = normalizedOfficialInstagram.replace(/^@/, "");
   const officialInstagramUrl = `https://www.instagram.com/${officialInstagramUsername}/`;
+
+  const selectedCampaignWeekDayConfig =
+    weekPlannerDays.find((day) => day.id === campaignDaySelectedWeekDay) || weekPlannerDays[1];
+  const isCampaignDayClosed = selectedCampaignWeekDayConfig.id === "segunda";
+  const campaignDayShortRecommendation =
+    weekDayShortRecommendations[selectedCampaignWeekDayConfig.id] || "Ajuste a campanha e gere seu conteúdo.";
+
+  const latestCampaignByWeekDay = useMemo(() => {
+    if (!Array.isArray(campaignDayWeeklyHistory)) return {};
+    const map = {};
+    for (const item of campaignDayWeeklyHistory) {
+      if (!item?.weekDayId) continue;
+      if (!map[item.weekDayId]) {
+        map[item.weekDayId] = item;
+      }
+    }
+    return map;
+  }, [campaignDayWeeklyHistory]);
+
+  useEffect(() => {
+    setCampaignDayBuilder((current) => ({
+      ...current,
+      ...getCampaignDayDefaultsByWeekDay(
+        campaignDaySelectedWeekDay,
+        campaignDaySelectedWeekDay === "sexta" ? "almoço" : current.moment
+      ),
+    }));
+  }, [campaignDaySelectedWeekDay, setCampaignDayBuilder]);
+
+  useEffect(() => {
+    setCampaignDayViewedRecord(latestCampaignByWeekDay[campaignDaySelectedWeekDay] || null);
+  }, [campaignDaySelectedWeekDay, latestCampaignByWeekDay]);
 
   const parseInstagramPostDate = (value) => {
     const parsed = new Date(String(value || "").replace(" ", "T"));
@@ -717,36 +844,208 @@ function App() {
     });
   };
 
-  const generateCampaignDayNow = (payload = campaignDayBuilder) => {
-    const pack = generateCampaignDayPack({
-      product: payload.product,
-      objective: payload.objective,
-      moment: payload.moment,
-      tone: payload.tone,
-      availableQuantity: payload.availableQuantity,
-      deadline: payload.deadline,
-      settings,
-    });
+  const generateCampaignDayNow = async (payload = campaignDayBuilder, { forcePlanning = false } = {}) => {
+    const isPlanningDay = isCampaignDayClosed || forcePlanning || payload.campaignType === "planejamento da semana";
+
+    const basePack = isPlanningDay
+      ? generateCampaignWeekPlanningPack({ settings })
+      : generateCampaignDayPack({
+          product: payload.product,
+          objective: payload.objective,
+          moment: payload.moment,
+          tone: payload.tone,
+          availableQuantity: payload.availableQuantity,
+          deadline: payload.deadline,
+          settings,
+        });
+
+    let finalPack = basePack;
+    let generationMessage = isPlanningDay
+      ? "Planejamento da semana gerado com sucesso!"
+      : "Campanha do dia gerada com sucesso!";
+
+    try {
+      const response = await fetch("/.netlify/functions/generate-campaign", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          form: {
+            product: payload.product,
+            objective: isPlanningDay ? "organizar campanhas de terça a domingo" : payload.objective,
+            audience: isPlanningDay ? "equipe do restaurante" : payload.objective === "atrair famílias" ? "famílias" : "clientes locais",
+            moment: payload.moment,
+            tone: payload.tone,
+            dayOfWeek: selectedCampaignWeekDayConfig.label,
+            campaignType: isPlanningDay ? "planejamento da semana" : "venda do dia",
+          },
+          settings: {
+            restaurantName: settings.restaurantName,
+            whatsappNumber: settings.whatsappNumber,
+            address: settings.address,
+            featuredDish: settings.featuredDish,
+            openingHours: settings.openingHours,
+          },
+          insights: {
+            dayStatus: isCampaignDayClosed ? "Fechado" : "Aberto",
+            dayRecommendation: campaignDayShortRecommendation,
+            weeklyPlanningTips: mondayPlanningRecommendations.join(" "),
+            bestHour: basePack.recommendations?.bestPostingTime || "19h - 21h",
+            bestVisualStyle: basePack.recommendations?.bestImageType || "close apetitoso com vapor",
+          },
+          metrics: {
+            selectedWeekDayId: selectedCampaignWeekDayConfig.id,
+            selectedWeekDayLabel: selectedCampaignWeekDayConfig.label,
+            isClosedDay: isCampaignDayClosed,
+            campaignObjective: payload.objective,
+          },
+        }),
+      });
+
+      const aiPayload = await response.json().catch(() => ({}));
+      const requiredKeys = [
+        "whatsapp",
+        "instagram_feed",
+        "instagram_story",
+        "facebook",
+        "tiktok",
+        "frase_imagem",
+        "prompt_imagem",
+        "roteiro_video",
+        "hashtags",
+        "horario_sugerido",
+        "cta_whatsapp",
+      ];
+
+      if (!response.ok) {
+        const message =
+          typeof aiPayload?.error === "string"
+            ? aiPayload.error
+            : "Não foi possível gerar conteúdo com IA neste momento.";
+        throw new Error(message);
+      }
+
+      const validPayload = requiredKeys.every((key) => typeof aiPayload?.[key] === "string");
+      if (!validPayload) {
+        throw new Error("Resposta da IA fora do formato esperado.");
+      }
+
+      const safeWhatsApp = isWeakWhatsAppText(aiPayload.whatsapp) ? basePack.whatsappText : aiPayload.whatsapp;
+      const safeStory = clampStoryToEightWords(aiPayload.instagram_story, basePack.instagramStoryText);
+      const safeHashtags = normalizeHashtagsToFive(aiPayload.hashtags, basePack.hashtags);
+
+      const shouldKeepPlanningFallback =
+        isPlanningDay &&
+        (hasDirectSalesIntent(safeWhatsApp) ||
+          hasDirectSalesIntent(aiPayload.instagram_feed) ||
+          hasDirectSalesIntent(aiPayload.instagram_story));
+
+      finalPack = {
+        ...basePack,
+        whatsappText: shouldKeepPlanningFallback ? basePack.whatsappText : safeWhatsApp,
+        statusWhatsAppText: shouldKeepPlanningFallback
+          ? basePack.statusWhatsAppText
+          : `${safeStory}\n${aiPayload.cta_whatsapp || basePack.finalWhatsappCall}`.trim(),
+        instagramStoryText: shouldKeepPlanningFallback ? basePack.instagramStoryText : safeStory,
+        instagramFeedCaption: shouldKeepPlanningFallback
+          ? basePack.instagramFeedCaption
+          : String(aiPayload.instagram_feed || "").trim() || basePack.instagramFeedCaption,
+        facebookText: shouldKeepPlanningFallback
+          ? basePack.facebookText
+          : String(aiPayload.facebook || "").trim() || basePack.facebookText,
+        imageShortPhrase: shouldKeepPlanningFallback
+          ? basePack.imageShortPhrase
+          : String(aiPayload.frase_imagem || "").trim() || basePack.imageShortPhrase,
+        imagePrompt: shouldKeepPlanningFallback
+          ? basePack.imagePrompt
+          : String(aiPayload.prompt_imagem || "").trim() || basePack.imagePrompt,
+        videoIdea: shouldKeepPlanningFallback
+          ? basePack.videoIdea
+          : String(aiPayload.roteiro_video || "").trim() || basePack.videoIdea,
+        hashtags: shouldKeepPlanningFallback ? basePack.hashtags : safeHashtags,
+        finalWhatsappCall: shouldKeepPlanningFallback
+          ? basePack.finalWhatsappCall
+          : String(aiPayload.cta_whatsapp || "").trim() || basePack.finalWhatsappCall,
+        recommendations: {
+          ...basePack.recommendations,
+          bestPostingTime:
+            String(aiPayload.horario_sugerido || "").trim() || basePack.recommendations?.bestPostingTime || "19h - 21h",
+        },
+      };
+
+      generationMessage = isPlanningDay
+        ? "Planejamento da semana gerado com IA com sucesso!"
+        : "Campanha do dia gerada com IA com sucesso!";
+    } catch (error) {
+      console.warn("Falha ao gerar campanha do dia com IA, usando fallback local:", error);
+      generationMessage = isPlanningDay
+        ? "Planejamento da semana gerado com fallback local."
+        : "Campanha do dia gerada com fallback local.";
+    }
 
     setCampaignDayBuilder(payload);
-    setCampaignDayGenerated(pack);
+    setCampaignDayGenerated(finalPack);
+
+    const now = new Date();
+    const formattedDate = now.toLocaleString("pt-BR");
+    const fullCampaignText = campaignDayOutputFields
+      .map((field) => `${field.title}\n${finalPack[field.key] || ""}`)
+      .join("\n\n------------------------------\n\n");
+
+    const weeklyRecord = {
+      id: `campaign-day-${selectedCampaignWeekDayConfig.id}-${now.getTime()}`,
+      weekDayId: selectedCampaignWeekDayConfig.id,
+      weekDayLabel: selectedCampaignWeekDayConfig.label,
+      generatedAt: formattedDate,
+      dateISO: now.toISOString(),
+      date: now.toLocaleDateString("pt-BR"),
+      dayStatus: isCampaignDayClosed ? "Fechado" : "Aberto",
+      campaignType: isPlanningDay ? "Planejamento da semana" : "Venda do dia",
+      product: payload.product,
+      objective: isPlanningDay ? "organizar campanhas de terça a domingo" : payload.objective,
+      moment: payload.moment,
+      tone: payload.tone,
+      whatsappText: finalPack.whatsappText,
+      instagramText: finalPack.instagramFeedCaption,
+      imagePhrase: finalPack.imageShortPhrase,
+      imagePrompt: finalPack.imagePrompt,
+      videoScript: finalPack.videoIdea,
+      hashtags: finalPack.hashtags,
+      suggestedTime: finalPack.recommendations?.bestPostingTime || "",
+      fullCampaignText,
+      pack: finalPack,
+      stateOfDay: isCampaignDayClosed ? "Fechado" : "Aberto",
+      channelContext: selectedCampaignWeekDayConfig.label,
+    };
+
+    const updatedExistingDay = campaignDayWeeklyHistory.some(
+      (item) => item.weekDayId === selectedCampaignWeekDayConfig.id
+    );
+    setCampaignDayWeeklyHistory((current) => {
+      const filtered = current.filter((item) => item.weekDayId !== selectedCampaignWeekDayConfig.id);
+      return [weeklyRecord, ...filtered];
+    });
+    setCampaignDayViewedRecord(weeklyRecord);
+
     setHistoryItems((current) => [
       createHistoryRecord({
-        promotionType: `Campanha do Dia: ${payload.product}`,
+        promotionType: isPlanningDay ? "Planejamento da Semana" : `Campanha do Dia: ${payload.product}`,
         channel: payload.objective,
         tone: payload.tone,
-        whatsappText: pack.whatsappText,
-        instagramText: pack.instagramFeedCaption,
-        facebookText: pack.facebookText,
-        hashtags: pack.hashtags,
-        videoScript: pack.videoIdea,
-        imagePrompt: pack.imagePrompt,
+        whatsappText: finalPack.whatsappText,
+        instagramText: finalPack.instagramFeedCaption,
+        facebookText: finalPack.facebookText,
+        hashtags: finalPack.hashtags,
+        videoScript: finalPack.videoIdea,
+        imagePrompt: finalPack.imagePrompt,
       }),
       ...current,
     ]);
 
-    setCampaignDayFeedback("Campanha do dia gerada com sucesso!");
-    setTimeout(() => setCampaignDayFeedback(""), 1800);
+    const updateMessage = updatedExistingDay ? "Campanha atualizada para este dia." : generationMessage;
+    setCampaignDayFeedback(updateMessage);
+    setTimeout(() => setCampaignDayFeedback(""), 2400);
   };
 
   const isWeakWhatsAppText = (value) => {
@@ -763,6 +1062,11 @@ function App() {
     if (words.length < 8) return true;
     if (hasPhone && !hasSalesVerb) return true;
     return false;
+  };
+
+  const hasDirectSalesIntent = (value) => {
+    const text = String(value || "").toLowerCase();
+    return /(pe[çc]a|pedido|compre|garanta|últimas unidades|venha hoje)/i.test(text);
   };
 
   const clampStoryToEightWords = (value, fallback) => {
@@ -1182,8 +1486,40 @@ function App() {
     setBuilder((current) => ({ ...current, [field]: value }));
   };
 
+  const handleSelectCampaignWeekDay = (weekDayId) => {
+    setCampaignDaySelectedWeekDay(weekDayId);
+    setCampaignDayViewedRecord(latestCampaignByWeekDay[weekDayId] || null);
+  };
+
+  const handleViewSavedCampaign = (weekDayId) => {
+    const savedCampaign = latestCampaignByWeekDay[weekDayId];
+    if (!savedCampaign) return;
+
+    setCampaignDayViewedRecord(savedCampaign);
+    setCampaignDayFeedback(`Última campanha de ${savedCampaign.weekDayLabel} carregada.`);
+    setTimeout(() => setCampaignDayFeedback(""), 1800);
+  };
+
   const updateCampaignDayBuilderField = (field, value) => {
-    setCampaignDayBuilder((current) => ({ ...current, [field]: value }));
+    setCampaignDayBuilder((current) => {
+      const next = { ...current, [field]: value };
+
+      if (field === "campaignType" && value === "planejamento da semana") {
+        next.objective = "organizar campanhas de terça a domingo";
+        next.moment = "manhã";
+        next.tone = "caseiro";
+      }
+
+      if (field === "moment" && campaignDaySelectedWeekDay === "sexta") {
+        const fridayDefaults = getCampaignDayDefaultsByWeekDay("sexta", value);
+        next.product = fridayDefaults.product;
+        next.moment = fridayDefaults.moment;
+        next.tone = fridayDefaults.tone;
+        next.objective = fridayDefaults.objective;
+      }
+
+      return next;
+    });
   };
 
   const updateIntelligentCampaignBuilderField = (field, value) => {
@@ -1412,6 +1748,9 @@ function App() {
     if (value === "médio") return "medio";
     return value;
   };
+
+  const shouldGeneratePlanningWeek =
+    isCampaignDayClosed || campaignDayBuilder.campaignType === "planejamento da semana";
 
   return (
     <div className="app-shell">
@@ -1751,7 +2090,72 @@ function App() {
             <h2>Campanha do Dia</h2>
             <p className="muted">Crie uma campanha diária completa para vender mais com um único fluxo.</p>
 
+            <div className="subcard">
+              <h3>Planejador semanal inteligente</h3>
+              <label className="week-day-select-label">
+                Dia da semana
+                <select
+                  onChange={(event) => handleSelectCampaignWeekDay(event.target.value)}
+                  value={campaignDaySelectedWeekDay}
+                >
+                  {weekPlannerDays.map((day) => (
+                    <option key={day.id} value={day.id}>
+                      {day.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="week-mini-calendar">
+                {weekPlannerDays.map((day) => {
+                  const hasCampaign = Boolean(latestCampaignByWeekDay[day.id]);
+                  const isSelected = day.id === campaignDaySelectedWeekDay;
+                  return (
+                    <article
+                      className={`week-day-card${isSelected ? " selected" : ""}${day.id === "segunda" ? " closed-day" : ""}`}
+                      key={day.id}
+                    >
+                      <button className="week-day-select-btn" onClick={() => handleSelectCampaignWeekDay(day.id)} type="button">
+                        {day.shortLabel}
+                      </button>
+                      <strong>{day.label}</strong>
+                      {day.id === "segunda" ? <span className="week-day-status">Fechado</span> : null}
+                      {hasCampaign ? <span className="week-day-marker" /> : null}
+                      {hasCampaign ? (
+                        <button className="week-day-view-btn" onClick={() => handleViewSavedCampaign(day.id)} type="button">
+                          Ver campanha
+                        </button>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+
+              <p className="hint">{campaignDayShortRecommendation}</p>
+              {isCampaignDayClosed ? <p className="input-error">Fechado às segundas-feiras.</p> : null}
+              {isCampaignDayClosed ? (
+                <div className="recommendation-list">
+                  {mondayPlanningRecommendations.map((tip, index) => (
+                    <p key={`monday-tip-${index}`}>• {tip}</p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
             <div className="form-grid">
+              <label className="full-width">
+                Tipo da campanha
+                <select
+                  disabled={isCampaignDayClosed}
+                  onChange={(event) => updateCampaignDayBuilderField("campaignType", event.target.value)}
+                  value={campaignDayBuilder.campaignType}
+                >
+                  {campaignDayTypes.map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+
               <label>
                 Produto principal
                 <select
@@ -1821,10 +2225,89 @@ function App() {
               </label>
             </div>
 
-            <button className="primary-btn full-width" onClick={() => generateCampaignDayNow(campaignDayBuilder)} type="button">
-              Gerar campanha do dia
-            </button>
+            {shouldGeneratePlanningWeek ? (
+              <button
+                className="primary-btn full-width"
+                onClick={() =>
+                  generateCampaignDayNow(
+                    {
+                      ...campaignDayBuilder,
+                      campaignType: "planejamento da semana",
+                      objective: "organizar campanhas de terça a domingo",
+                      moment: "manhã",
+                      tone: "caseiro",
+                    },
+                    { forcePlanning: true }
+                  )
+                }
+                type="button"
+              >
+                Gerar planejamento da semana
+              </button>
+            ) : (
+              <button className="primary-btn full-width" onClick={() => generateCampaignDayNow(campaignDayBuilder)} type="button">
+                Gerar campanha do dia
+              </button>
+            )}
             {campaignDayFeedback ? <p className="hint">{campaignDayFeedback}</p> : null}
+
+            {campaignDayViewedRecord ? (
+              <div className="subcard">
+                <h3>Campanha salva para {campaignDayViewedRecord.weekDayLabel}</h3>
+                <p className="muted">
+                  {campaignDayViewedRecord.generatedAt} • {campaignDayViewedRecord.dayStatus} •{" "}
+                  {campaignDayViewedRecord.campaignType}
+                </p>
+                <div className="info-stack">
+                  <div className="info-item">
+                    <span>WhatsApp</span>
+                    <strong>{campaignDayViewedRecord.whatsappText}</strong>
+                  </div>
+                  <div className="info-item">
+                    <span>Instagram</span>
+                    <strong>{campaignDayViewedRecord.instagramText}</strong>
+                  </div>
+                </div>
+                <div className="smart-actions-grid">
+                  <button
+                    className="secondary-btn"
+                    onClick={() =>
+                      copyText(`weekly_whatsapp_${campaignDayViewedRecord.id}`, campaignDayViewedRecord.whatsappText || "")
+                    }
+                    type="button"
+                  >
+                    {copiedKey === `weekly_whatsapp_${campaignDayViewedRecord.id}` ? "Copiado!" : "Copiar WhatsApp"}
+                  </button>
+                  <button
+                    className="secondary-btn"
+                    onClick={() =>
+                      copyText(`weekly_instagram_${campaignDayViewedRecord.id}`, campaignDayViewedRecord.instagramText || "")
+                    }
+                    type="button"
+                  >
+                    {copiedKey === `weekly_instagram_${campaignDayViewedRecord.id}` ? "Copiado!" : "Copiar Instagram"}
+                  </button>
+                  <button
+                    className="secondary-btn"
+                    onClick={() =>
+                      copyText(`weekly_prompt_${campaignDayViewedRecord.id}`, campaignDayViewedRecord.imagePrompt || "")
+                    }
+                    type="button"
+                  >
+                    {copiedKey === `weekly_prompt_${campaignDayViewedRecord.id}` ? "Copiado!" : "Copiar prompt de imagem"}
+                  </button>
+                  <button
+                    className="secondary-btn"
+                    onClick={() =>
+                      copyText(`weekly_full_${campaignDayViewedRecord.id}`, campaignDayViewedRecord.fullCampaignText || "")
+                    }
+                    type="button"
+                  >
+                    {copiedKey === `weekly_full_${campaignDayViewedRecord.id}` ? "Copiado!" : "Copiar campanha completa"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {campaignDayGenerated ? (
               <>

@@ -523,6 +523,81 @@ textarea {
   gap: 0.55rem;
 }
 
+.week-day-select-label {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.week-mini-calendar {
+  margin-top: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.week-day-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.5rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.week-day-card.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(225, 91, 30, 0.18);
+}
+
+.week-day-card.closed-day {
+  background: #fff4ec;
+}
+
+.week-day-select-btn {
+  min-height: 36px;
+  border: 1px solid #ffd2ac;
+  background: #fff7ef;
+  color: #8d4a1d;
+  border-radius: 10px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.week-day-status {
+  font-size: 0.72rem;
+  color: #9a4e24;
+  font-weight: 700;
+}
+
+.week-day-marker {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #f08b2d;
+  box-shadow: 0 0 0 2px #fff6ec;
+}
+
+.week-day-view-btn {
+  min-height: 30px;
+  border-radius: 8px;
+  border: 1px solid #ffd5ab;
+  background: #fff2e4;
+  color: #954a1c;
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .footer-note {
   margin-top: 0.85rem;
   text-align: center;
@@ -538,6 +613,10 @@ textarea {
   .favorites-actions,
   .history-actions {
     grid-template-columns: 1fr;
+  }
+
+  .week-mini-calendar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .primary-btn,

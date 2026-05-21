@@ -44,8 +44,23 @@ const objectiveProfile = {
   },
   "divulgar prato do dia": {
     trigger: "destaque do prato principal do dia",
-    action: "Hoje o prato do dia está imperdível. Peça enquanto está disponível.",
+    action: "Hoje o prato do dia está no ponto. Peça enquanto está disponível.",
     channelFocus: "foco em destaque diário da cozinha",
+  },
+  "atrair famílias": {
+    trigger: "convite para almoço em família com comida caseira",
+    action: "Chame a família e venha viver um almoço acolhedor no Sabor Latino.",
+    channelFocus: "foco em público familiar e refeição completa",
+  },
+  "promover comida cubana": {
+    trigger: "fortalecer a identidade cubana da casa",
+    action: "Hoje é dia de sabor cubano de verdade. Faça seu pedido no WhatsApp.",
+    channelFocus: "foco em posicionamento e diferenciação cubana",
+  },
+  "organizar campanhas de terça a domingo": {
+    trigger: "planejar os melhores conteúdos para a semana",
+    action: "Organize os posts e ofertas da semana para vender mais de terça a domingo.",
+    channelFocus: "foco em planejamento semanal",
   },
 };
 
@@ -75,6 +90,11 @@ const toneProfile = {
     opening: "Comida com cara de casa e sabor de carinho.",
     texture: "Mensagem quente, afetiva e apetitosa.",
   },
+  emocional: {
+    emoji: "❤️",
+    opening: "Comida que abraça e cria memória boa na mesa.",
+    texture: "Mensagem sensível, humana e conectada à família.",
+  },
 };
 
 const momentRecommendation = {
@@ -85,6 +105,10 @@ const momentRecommendation = {
   almoço: {
     bestPostingTime: "11h30 - 13h30",
     videoHook: "urgência para quem está decidindo o almoço",
+  },
+  "almoço familiar": {
+    bestPostingTime: "11h - 13h",
+    videoHook: "convite emocional para mesa em família",
   },
   tarde: {
     bestPostingTime: "16h30 - 18h00",
@@ -101,6 +125,9 @@ const objectiveFormatRecommendation = {
   "atrair pessoas ao restaurante": "Instagram Feed 4:5 + Facebook com localização",
   "vender últimas unidades": "Story/Reel curto com texto urgente",
   "divulgar prato do dia": "Feed 4:5 com legenda detalhada",
+  "atrair famílias": "Feed 4:5 + Facebook com chamada para almoço em família",
+  "promover comida cubana": "Reel vertical + Story com close de preparo",
+  "organizar campanhas de terça a domingo": "Checklist semanal + calendário de posts",
 };
 
 const productImageRecommendation = {
@@ -111,14 +138,48 @@ const productImageRecommendation = {
   "combo familiar": "mesa abundante com clima familiar e rostos felizes",
 };
 
-const buildHashtags = (product, objective) => {
-  const productTag = product.replace(/\s+/g, "");
-  const objectiveTag = objective
+const normalizeTag = (value) =>
+  String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "");
+    .replace(/[^a-zA-Z0-9]/g, "");
 
-  return `#SaborLatino #ComidaLatina #NovaBassano #${productTag} #${objectiveTag} #PedidoNoWhatsApp #FoodMarketing`;
+const buildHashtags = (product, objective) =>
+  `#SaborLatino #NovaBassano #${normalizeTag(product)} #${normalizeTag(objective)} #PedidoNoWhatsApp`;
+
+export const generateCampaignWeekPlanningPack = ({ settings }) => {
+  const restaurantName = settings.restaurantName || "Sabor Latino";
+  const whatsapp = settings.whatsappNumber || "+55 54 8100-7256";
+
+  return {
+    whatsappText: `Segunda é dia de planejamento no ${restaurantName}.
+Vamos preparar os posts e ofertas de terça a domingo para vender mais.
+Se quiser alinhar o cardápio da semana, me chama no WhatsApp ${whatsapp}.`,
+    statusWhatsAppText: `Planejamento da semana
+Organizar posts de terça a domingo
+Revisar pratos com melhor resultado`,
+    instagramStoryText: "Segunda de planejamento para vender melhor.",
+    instagramFeedCaption: `Hoje estamos fechados no ${restaurantName}, mas trabalhando nos bastidores.
+Segunda é o dia ideal para planejar campanhas da semana, revisar resultados e organizar ofertas.
+De terça a domingo, foco total em vendas com conteúdo mais estratégico.`,
+    facebookText: `${restaurantName} fechado às segundas-feiras.
+Hoje é dia de organizar campanhas, revisar desempenho dos pratos e preparar os conteúdos de terça a domingo.
+Assim a semana já começa com tudo.`,
+    imageShortPhrase: "Segunda: planejamento da semana",
+    imagePrompt:
+      "Crie imagem realista de planejamento semanal para restaurante latino, com caderno aberto, calendário, celular com WhatsApp e clima de organização. Cores quentes, ambiente acolhedor, sem texto na imagem.",
+    videoIdea: `Vídeo de 8 segundos:
+0-2s: mostrar agenda e calendário da semana.
+2-5s: destacar tópicos: posts, pratos e promoções.
+5-8s: mensagem final de preparação para vender de terça a domingo.`,
+    hashtags: "#SaborLatino #NovaBassano #PlanejamentoSemanal #RestauranteFamiliar #MarketingLocal",
+    finalWhatsappCall: `Organização pronta para a semana. Chame no WhatsApp ${whatsapp} para acompanhar as promoções de terça a domingo.`,
+    recommendations: {
+      bestPostingTime: "Segunda: 10h - 12h (planejamento interno)",
+      bestFormat: "Checklist semanal + rascunho de posts",
+      bestImageType: "foto de planejamento com agenda, celular e cardápio",
+    },
+  };
 };
 
 export const generateCampaignDayPack = ({
@@ -185,7 +246,7 @@ ${deadlineLine}
 
   const imageShortPhrase = `${productData.label.toUpperCase()} HOJE • PEÇA AGORA`;
 
-  const imagePrompt = `Crie imagem promocional original para ${restaurantName}, estilo restaurante latino/cubano, cores quentes, visual apetitoso.
+  const imagePrompt = `Crie imagem promocional original para ${restaurantName}, estilo restaurante latino/cubano, cores quentes e visual apetitoso.
 Produto principal: ${productData.highlight}.
 Objetivo da campanha: ${objective} (${objectiveData.channelFocus}).
 Momento do dia: ${moment}.
