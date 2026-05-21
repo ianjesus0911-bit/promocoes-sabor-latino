@@ -92,17 +92,19 @@ const buildHashtags = ({ product, objective, audience }) => {
   )} #${normalizeTag(audience)} #PedidoNoWhatsApp #MarketingGastronomico`;
 };
 
-export const buildSimulatedInstagramInsights = ({ instagramMetrics, selectedProduct, channel, moment }) => {
+export const buildManualInstagramInsights = ({ instagramMetrics, selectedProduct, channel, moment }) => {
   const fallbackBestHour = bestTimeByMoment[moment] || "18h30 - 20h30";
   const metricHour = instagramMetrics?.bestHourRange || fallbackBestHour;
-  const metricTopProduct = instagramMetrics?.topDish || productLabels[selectedProduct] || "prato do dia";
+  const metricTopProduct =
+    instagramMetrics?.topDishByOrders || instagramMetrics?.topDish || productLabels[selectedProduct] || "prato do dia";
+  const hasManualData = Number(instagramMetrics?.analyzedCount || 0) > 0;
 
   const productFromMetrics = Object.entries(productLabels).find(([_, label]) =>
     String(metricTopProduct).toLowerCase().includes(label.split(" ")[0])
   );
 
   return {
-    source: "simulated",
+    source: hasManualData ? "manual" : "internal_patterns",
     topProduct: productFromMetrics?.[0] || selectedProduct,
     bestFormat: formatByChannel[channel] || formatByChannel.Todos,
     bestHour: metricHour,
@@ -131,7 +133,7 @@ export const generateIntelligentCampaignPack = ({
   const toneData = toneMap[tone] || toneMap.direto;
   const fallbackHour = bestTimeByMoment[moment] || "18h30 - 20h30";
   const insights = instagramInsights || {
-    source: "simulated",
+    source: "internal_patterns",
     topProduct: product,
     bestFormat: formatByChannel[mainChannel] || formatByChannel.Todos,
     bestHour: fallbackHour,
@@ -141,10 +143,10 @@ export const generateIntelligentCampaignPack = ({
   const bestProductLabel = productLabels[insights.topProduct] || insights.topProduct;
   const hashtags = buildHashtags({ product, objective, audience });
   const finalWhatsAppCTA = `👉 Peça agora no WhatsApp ${whatsapp} com a frase: "Quero ${productLabel} da campanha inteligente!"`;
-  const simulatedNotice =
-    insights.source === "simulated"
-      ? "Recomendação baseada em padrões internos e dados de exemplo."
-      : "Recomendação baseada em dados disponíveis do Instagram.";
+  const sourceNotice =
+    insights.source === "manual"
+      ? "Recomendação baseada em dados manuais do Instagram oficial."
+      : "Recomendação baseada em padrões internos enquanto você registra novas publicações.";
 
   const strategyRecommended = [
     `${toneData.emoji} Estratégia inteligente para ${restaurantName}`,
@@ -157,7 +159,7 @@ export const generateIntelligentCampaignPack = ({
     `Melhor formato recomendado: ${insights.bestFormat}.`,
     `Melhor horário sugerido: ${insights.bestHour}.`,
     `Melhor estilo visual: ${insights.bestVisualStyle}.`,
-    simulatedNotice,
+    sourceNotice,
   ].join("\n");
 
   const whatsappText = `${toneData.emoji} ${toneData.opening}
@@ -230,6 +232,6 @@ Publicar em: ${insights.bestHour}.`;
     bestFormatSuggested: insights.bestFormat,
     bestVisualStyleSuggested: insights.bestVisualStyle,
     bestProductFromData: bestProductLabel,
-    recommendationSourceNotice: simulatedNotice,
+    recommendationSourceNotice: sourceNotice,
   };
 };

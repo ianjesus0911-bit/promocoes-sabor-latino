@@ -19,7 +19,7 @@ import { usePersistentState } from "./hooks/usePersistentState";
 import { generateCampaignDayPack } from "./utils/campaignDayGenerator";
 import { generateImagePromptPack } from "./utils/imagePromptGenerator";
 import {
-  buildSimulatedInstagramInsights,
+  buildManualInstagramInsights,
   generateIntelligentCampaignPack,
 } from "./utils/intelligentCampaignGenerator";
 import { generatePromotionPack } from "./utils/promoGenerator";
@@ -31,7 +31,7 @@ const sections = [
   { id: "criador", label: "Criador" },
   { id: "gerador", label: "Gerador" },
   { id: "campanha_dia", label: "Campanha do Dia" },
-  { id: "instagram_oficial", label: "Instagram Oficial" },
+  { id: "instagram_oficial", label: "Instagram Manual" },
   { id: "insp_imagens", label: "Inspirações & Imagens" },
   { id: "historico", label: "Histórico" },
   { id: "favoritas", label: "Favoritas" },
@@ -174,14 +174,11 @@ const intelligentCampaignOutputFields = [
   { key: "finalWhatsAppCTA", title: "CTA final para WhatsApp" },
 ];
 
-const defaultInstagramConnection = {
-  apiStatus: "nao_conectado",
-};
-
 const defaultInstagramPosts = [
   {
     id: "ig-1",
-    date: "2026-05-18 19:20",
+    date: "2026-05-18T19:20",
+    link: "https://www.instagram.com/p/exemplo1/",
     type: "Reel",
     dish: "Pizza cubana",
     views: 18600,
@@ -190,11 +187,13 @@ const defaultInstagramPosts = [
     saves: 256,
     shares: 192,
     estimatedOrders: 54,
+    notes: "Close com queijo puxando e CTA no final.",
     performance: "alto",
   },
   {
     id: "ig-2",
-    date: "2026-05-17 12:25",
+    date: "2026-05-17T12:25",
+    link: "https://www.instagram.com/p/exemplo2/",
     type: "Feed",
     dish: "Almoço latino",
     views: 7900,
@@ -203,11 +202,13 @@ const defaultInstagramPosts = [
     saves: 104,
     shares: 67,
     estimatedOrders: 39,
+    notes: "Foto farta, bom resultado no horário de almoço.",
     performance: "alto",
   },
   {
     id: "ig-3",
-    date: "2026-05-16 18:45",
+    date: "2026-05-16T18:45",
+    link: "https://www.instagram.com/p/exemplo3/",
     type: "Story",
     dish: "Ropa vieja cubana",
     views: 5400,
@@ -216,11 +217,13 @@ const defaultInstagramPosts = [
     saves: 58,
     shares: 30,
     estimatedOrders: 26,
+    notes: "Boa retenção, mas CTA discreto.",
     performance: "médio",
   },
   {
     id: "ig-4",
-    date: "2026-05-15 20:10",
+    date: "2026-05-15T20:10",
+    link: "https://www.instagram.com/p/exemplo4/",
     type: "Reel",
     dish: "Combo familiar",
     views: 13300,
@@ -229,11 +232,13 @@ const defaultInstagramPosts = [
     saves: 168,
     shares: 147,
     estimatedOrders: 41,
+    notes: "Vídeo com mesa cheia funcionou muito bem.",
     performance: "alto",
   },
   {
     id: "ig-5",
-    date: "2026-05-14 15:35",
+    date: "2026-05-14T15:35",
+    link: "https://www.instagram.com/p/exemplo5/",
     type: "Feed",
     dish: "Sobremesa",
     views: 4200,
@@ -242,11 +247,13 @@ const defaultInstagramPosts = [
     saves: 34,
     shares: 17,
     estimatedOrders: 11,
+    notes: "Bom para branding, menor conversão em pedidos.",
     performance: "baixo",
   },
   {
     id: "ig-6",
-    date: "2026-05-13 18:30",
+    date: "2026-05-13T18:30",
+    link: "https://www.instagram.com/p/exemplo6/",
     type: "Reel",
     dish: "Ropa vieja cubana",
     views: 11200,
@@ -255,9 +262,26 @@ const defaultInstagramPosts = [
     saves: 136,
     shares: 125,
     estimatedOrders: 37,
+    notes: "Vapor e corte da carne aumentaram engajamento.",
     performance: "alto",
   },
 ];
+
+const instagramManualContentTypes = ["Reel", "Story", "Feed"];
+
+const defaultInstagramManualForm = {
+  date: "",
+  link: "",
+  type: "Reel",
+  dish: "",
+  views: "",
+  likes: "",
+  comments: "",
+  shares: "",
+  saves: "",
+  orders: "",
+  notes: "",
+};
 
 const instagramGeneratedFields = [
   { key: "whatsappText", title: "Texto para WhatsApp" },
@@ -266,12 +290,6 @@ const instagramGeneratedFields = [
   { key: "imagePrompt", title: "Prompt de imagem" },
   { key: "videoIdea", title: "Ideia de vídeo curto" },
 ];
-
-const instagramApiStatusLabels = {
-  nao_conectado: "Não conectado",
-  simulado: "Simulado",
-  conectado: "Conectado",
-};
 
 const forbiddenInstagramPathKeywords = new Set([
   "reel",
@@ -349,6 +367,7 @@ const normalizeInstagramOfficialInput = (rawValue) => {
 
   return { value: `@${username.toLowerCase()}` };
 };
+
 function App() {
   const [activeSection, setActiveSection] = useState("inicio");
   const [settings, setSettings] = usePersistentState("promocoes.settings", initialSettings);
@@ -372,14 +391,11 @@ function App() {
     defaultCampaignDayBuilder
   );
   const [campaignDayGenerated, setCampaignDayGenerated] = usePersistentState("promocoes.campanhaDia.generated", null);
-  const [instagramConnection, setInstagramConnection] = usePersistentState(
-    "promocoes.instagramOfficial.connection",
-    defaultInstagramConnection
-  );
-  const [instagramPosts] = usePersistentState("promocoes.instagramOfficial.posts", defaultInstagramPosts);
+  const [instagramPosts, setInstagramPosts] = usePersistentState("promocoes.instagramOfficial.posts", defaultInstagramPosts);
   const [instagramGenerated, setInstagramGenerated] = usePersistentState("promocoes.instagramOfficial.generated", null);
 
   const [inspirationForm, setInspirationForm] = useState(defaultInspirationForm);
+  const [instagramManualForm, setInstagramManualForm] = useState(defaultInstagramManualForm);
   const [copiedKey, setCopiedKey] = useState("");
   const [favoriteFeedback, setFavoriteFeedback] = useState("");
   const [imageCopyFeedback, setImageCopyFeedback] = useState("");
@@ -388,6 +404,7 @@ function App() {
   const [intelligentCampaignLoading, setIntelligentCampaignLoading] = useState(false);
   const [campaignDayFeedback, setCampaignDayFeedback] = useState("");
   const [instagramFeedback, setInstagramFeedback] = useState("");
+  const [instagramManualFeedback, setInstagramManualFeedback] = useState("");
   const [instagramProfileInput, setInstagramProfileInput] = useState(
     settings.instagramOfficial || "@saborlatinobassano"
   );
@@ -428,12 +445,6 @@ function App() {
     setInstagramProfileError("");
   }, [settings.instagramOfficial, setSettings]);
 
-  useEffect(() => {
-    if (typeof instagramConnection?.apiStatus === "string") return;
-    const migratedStatus = instagramConnection?.connected ? "simulado" : "nao_conectado";
-    setInstagramConnection({ apiStatus: migratedStatus });
-  }, [instagramConnection, setInstagramConnection]);
-
   const openingMessage = useMemo(() => {
     return `Olá! Quero ver as promoções de hoje do ${settings.restaurantName}.`;
   }, [settings.restaurantName]);
@@ -443,16 +454,39 @@ function App() {
     "@saborlatinobassano";
   const officialInstagramUsername = normalizedOfficialInstagram.replace(/^@/, "");
   const officialInstagramUrl = `https://www.instagram.com/${officialInstagramUsername}/`;
-  const instagramApiStatus = instagramConnection?.apiStatus || "nao_conectado";
-  const instagramApiStatusLabel = instagramApiStatusLabels[instagramApiStatus] || instagramApiStatusLabels.nao_conectado;
-  const isInstagramApiConnected = instagramApiStatus === "conectado";
+
+  const parseInstagramPostDate = (value) => {
+    const parsed = new Date(String(value || "").replace(" ", "T"));
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  };
+
+  const formatInstagramPostDate = (value) => {
+    const parsed = parseInstagramPostDate(value);
+    if (!parsed) return "Data não informada";
+    return parsed.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  };
 
   const selectedInspiration = useMemo(() => {
     return inspirations.find((item) => item.id === imageBuilder.selectedInspirationId) || null;
   }, [imageBuilder.selectedInspirationId, inspirations]);
 
   const instagramPostsList = useMemo(() => {
-    return Array.isArray(instagramPosts) ? instagramPosts : [];
+    if (!Array.isArray(instagramPosts)) return [];
+    return instagramPosts.map((post) => ({
+      ...post,
+      type: post.type || "Feed",
+      dish: post.dish || "Prato latino",
+      date: post.date || "",
+      link: post.link || "",
+      notes: post.notes || "",
+      views: Number(post.views) || 0,
+      likes: Number(post.likes) || 0,
+      comments: Number(post.comments) || 0,
+      saves: Number(post.saves) || 0,
+      shares: Number(post.shares) || 0,
+      estimatedOrders: Number(post.estimatedOrders ?? post.ordersGenerated) || 0,
+    }));
   }, [instagramPosts]);
 
   const calculateInstagramScore = (post) => {
@@ -471,19 +505,24 @@ function App() {
     if (!posts.length) {
       return {
         analyzedCount: 0,
-        topReel: null,
-        topCommentsPost: null,
+        topPerformancePost: null,
+        topContentType: "Reel",
+        topDishByOrders: "Ropa vieja cubana",
+        bestObservedHourRange: "18h - 20h",
+        recommendationToday:
+          "Registre publicações manuais para receber recomendações mais precisas do que publicar hoje.",
         topDish: "Ropa vieja cubana",
         bestDay: "quinta-feira",
         bestHourRange: "18h - 20h",
       };
     }
 
-    const topReel = posts
-      .filter((post) => post.type === "Reel")
-      .sort((a, b) => b.views - a.views)[0] || null;
+    const scoredPosts = posts.map((post) => ({
+      ...post,
+      score: calculateInstagramScore(post),
+    }));
 
-    const topCommentsPost = [...posts].sort((a, b) => b.comments - a.comments)[0] || null;
+    const topPerformancePost = [...scoredPosts].sort((a, b) => b.score - a.score)[0] || null;
 
     const byDish = posts.reduce((acc, post) => {
       const score = calculateInstagramScore(post);
@@ -495,19 +534,29 @@ function App() {
       return acc;
     }, {});
 
+    const byDishOrders = posts.reduce((acc, post) => {
+      acc[post.dish] = (acc[post.dish] || 0) + (Number(post.estimatedOrders) || 0);
+      return acc;
+    }, {});
+
+    const topDishByOrders =
+      Object.entries(byDishOrders)
+        .sort((a, b) => b[1] - a[1])
+        .map(([dish]) => dish)[0] || "Ropa vieja cubana";
+
     const topDish =
       Object.entries(byDish)
         .sort((a, b) => b[1].total / b[1].count - a[1].total / a[1].count)
         .map(([dish]) => dish)[0] || "Ropa vieja cubana";
 
-    const byWeekDay = posts.reduce((acc, post) => {
-      const date = new Date(post.date.replace(" ", "T"));
+    const byWeekDay = scoredPosts.reduce((acc, post) => {
+      const date = parseInstagramPostDate(post.date);
+      if (!date) return acc;
       const weekDay = date.toLocaleDateString("pt-BR", { weekday: "long" });
-      const score = calculateInstagramScore(post);
       if (!acc[weekDay]) {
         acc[weekDay] = { total: 0, count: 0 };
       }
-      acc[weekDay].total += score;
+      acc[weekDay].total += post.score;
       acc[weekDay].count += 1;
       return acc;
     }, {});
@@ -517,13 +566,14 @@ function App() {
         .sort((a, b) => b[1].total / b[1].count - a[1].total / a[1].count)
         .map(([day]) => day)[0] || "quinta-feira";
 
-    const byHour = posts.reduce((acc, post) => {
-      const hour = Number(post.date.slice(11, 13));
-      const score = calculateInstagramScore(post);
+    const byHour = scoredPosts.reduce((acc, post) => {
+      const date = parseInstagramPostDate(post.date);
+      if (!date) return acc;
+      const hour = Number(date.getHours());
       if (!acc[hour]) {
         acc[hour] = { total: 0, count: 0 };
       }
-      acc[hour].total += score;
+      acc[hour].total += post.score;
       acc[hour].count += 1;
       return acc;
     }, {});
@@ -535,10 +585,29 @@ function App() {
 
     const bestHourRange = `${String(bestHour).padStart(2, "0")}h - ${String((bestHour + 2) % 24).padStart(2, "0")}h`;
 
+    const byContentType = scoredPosts.reduce((acc, post) => {
+      if (!acc[post.type]) {
+        acc[post.type] = { total: 0, count: 0 };
+      }
+      acc[post.type].total += post.score;
+      acc[post.type].count += 1;
+      return acc;
+    }, {});
+
+    const topContentType =
+      Object.entries(byContentType)
+        .sort((a, b) => b[1].total / b[1].count - a[1].total / a[1].count)
+        .map(([contentType]) => contentType)[0] || "Reel";
+
+    const recommendationToday = `Hoje vale focar em ${topContentType} com ${topDishByOrders}, publicar entre ${bestHourRange} e CTA forte para WhatsApp.`;
+
     return {
       analyzedCount: posts.length,
-      topReel,
-      topCommentsPost,
+      topPerformancePost,
+      topContentType,
+      topDishByOrders,
+      bestObservedHourRange: bestHourRange,
+      recommendationToday,
       topDish,
       bestDay,
       bestHourRange,
@@ -546,72 +615,19 @@ function App() {
   }, [instagramPostsList]);
 
   const instagramRecommendations = useMemo(() => {
-    const topDishLower = instagramMetrics.topDish.toLowerCase();
+    const topDishLower = instagramMetrics.topDishByOrders.toLowerCase();
     return [
-      `Hoje vale promover ${topDishLower} porque os posts desse prato tiveram alto engajamento.`,
-      "Use vídeo vertical com close-up e vapor.",
-      `Publique entre ${instagramMetrics.bestHourRange}.`,
-      "Use chamada clara para pedir por WhatsApp.",
+      `Hoje vale promover ${topDishLower} porque esse prato gerou mais pedidos nas análises manuais.`,
+      `Formato com melhor desempenho: ${instagramMetrics.topContentType}.`,
+      `Melhor horário observado: ${instagramMetrics.bestObservedHourRange}.`,
+      instagramMetrics.recommendationToday,
     ];
-  }, [instagramMetrics.bestHourRange, instagramMetrics.topDish]);
-
-  const inferProductKeyFromDish = (dishName) => {
-    const text = String(dishName || "").toLowerCase();
-    if (text.includes("pizza")) return "pizza";
-    if (text.includes("ropa vieja")) return "ropa vieja cubana";
-    if (text.includes("sobremesa") || text.includes("doce")) return "sobremesa";
-    if (text.includes("combo")) return "combo familiar";
-    if (text.includes("almoco") || text.includes("almoço")) return "almoço";
-    return "almoço";
-  };
-
-  const formatRecommendationFromChannel = (channel) => {
-    const map = {
-      WhatsApp: "Status + mensagem direta no WhatsApp",
-      "Instagram Story": "Story vertical 9:16 com texto curto",
-      "Instagram Feed": "Feed 4:5 com close apetitoso",
-      Facebook: "Post com localização e oferta clara",
-      TikTok: "Vídeo curto com gancho visual forte",
-      Todos: "Pacote multi-canal com adaptação rápida",
-    };
-    return map[channel] || map.Todos;
-  };
-
-  const visualStyleFromProduct = (product) => {
-    const map = {
-      almoço: "prato completo com vapor e textura realista",
-      pizza: "fatia com queijo puxando e corte dinâmico",
-      "ropa vieja cubana": "carne desfiada suculenta em close-up",
-      sobremesa: "textura cremosa com luz quente suave",
-      "combo familiar": "mesa farta com clima familiar",
-    };
-    return map[product] || "close com vapor e contraste quente";
-  };
-
-  const fetchRealInstagramInsights = async (payload) => {
-    const response = await fetch("/api/instagram/recommendations?limit=25", {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
-
-    if (!response.ok) {
-      throw new Error("Falha ao buscar recomendações reais do Instagram.");
-    }
-
-    const data = await response.json();
-    if (!data?.ok || !data?.metrics) {
-      throw new Error("Resposta do backend sem métricas suficientes.");
-    }
-
-    const topProduct = inferProductKeyFromDish(data.metrics.topDish);
-    return {
-      source: "real",
-      topProduct,
-      bestHour: data.metrics.bestHourRange || instagramMetrics.bestHourRange,
-      bestFormat: formatRecommendationFromChannel(payload.mainChannel),
-      bestVisualStyle: visualStyleFromProduct(topProduct),
-    };
-  };
+  }, [
+    instagramMetrics.bestObservedHourRange,
+    instagramMetrics.recommendationToday,
+    instagramMetrics.topContentType,
+    instagramMetrics.topDishByOrders,
+  ]);
 
   const createHistoryRecord = (payload) => ({
     id: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -736,22 +752,12 @@ function App() {
   const generateIntelligentCampaignNow = async (payload = intelligentCampaignBuilder) => {
     setIntelligentCampaignLoading(true);
     try {
-      const simulatedInsights = buildSimulatedInstagramInsights({
+      const manualInsights = buildManualInstagramInsights({
         instagramMetrics,
         selectedProduct: payload.product,
         channel: payload.mainChannel,
         moment: payload.moment,
       });
-
-      let insights = simulatedInsights;
-
-      if (isInstagramApiConnected) {
-        try {
-          insights = await fetchRealInstagramInsights(payload);
-        } catch (error) {
-          console.warn("Usando fallback simulado no módulo inteligente:", error.message);
-        }
-      }
 
       const pack = generateIntelligentCampaignPack({
         product: payload.product,
@@ -761,7 +767,7 @@ function App() {
         mainChannel: payload.mainChannel,
         tone: payload.tone,
         settings,
-        instagramInsights: insights,
+        instagramInsights: manualInsights,
       });
 
       setIntelligentCampaignBuilder(payload);
@@ -1122,12 +1128,58 @@ function App() {
     }
   };
 
-  const enableInstagramApiSimulation = () => {
-    setInstagramConnection({ apiStatus: "simulado" });
+  const updateInstagramManualField = (field, value) => {
+    setInstagramManualForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
   };
 
-  const clearInstagramApiSimulation = () => {
-    setInstagramConnection({ apiStatus: "nao_conectado" });
+  const saveInstagramManualPost = (event) => {
+    event.preventDefault();
+
+    if (!instagramManualForm.date || !instagramManualForm.type || !instagramManualForm.dish.trim()) {
+      setInstagramManualFeedback("Preencha Data, Tipo de conteúdo e Prato mostrado.");
+      setTimeout(() => setInstagramManualFeedback(""), 2000);
+      return;
+    }
+
+    if (instagramManualForm.link) {
+      try {
+        const parsed = new URL(instagramManualForm.link);
+        if (!/^https?:$/.test(parsed.protocol)) {
+          throw new Error("Link inválido");
+        }
+      } catch (error) {
+        setInstagramManualFeedback("Link da publicação inválido. Use um URL completo começando com http.");
+        setTimeout(() => setInstagramManualFeedback(""), 2200);
+        return;
+      }
+    }
+
+    const newPost = {
+      id: `ig-manual-${Date.now()}`,
+      date: instagramManualForm.date,
+      link: instagramManualForm.link.trim(),
+      type: instagramManualForm.type,
+      dish: instagramManualForm.dish.trim(),
+      views: Number(instagramManualForm.views) || 0,
+      likes: Number(instagramManualForm.likes) || 0,
+      comments: Number(instagramManualForm.comments) || 0,
+      shares: Number(instagramManualForm.shares) || 0,
+      saves: Number(instagramManualForm.saves) || 0,
+      estimatedOrders: Number(instagramManualForm.orders) || 0,
+      notes: instagramManualForm.notes.trim(),
+    };
+
+    setInstagramPosts((current) => [newPost, ...current]);
+    setInstagramManualForm(defaultInstagramManualForm);
+    setInstagramManualFeedback("Publicação manual salva com sucesso!");
+    setTimeout(() => setInstagramManualFeedback(""), 1800);
+  };
+
+  const removeInstagramManualPost = (postId) => {
+    setInstagramPosts((current) => current.filter((post) => post.id !== postId));
   };
 
   const copyAllInstagramOfficial = () => {
@@ -1139,7 +1191,7 @@ function App() {
   };
 
   const generateFromInstagramOfficial = () => {
-    const topDish = instagramMetrics.topDish || "Ropa vieja cubana";
+    const topDish = instagramMetrics.topDishByOrders || instagramMetrics.topDish || "Ropa vieja cubana";
 
     const promotionTypeMap = {
       "Pizza cubana": "Pizza",
@@ -1199,7 +1251,7 @@ function App() {
       ...current,
     ]);
 
-    setInstagramFeedback("Promoção gerada com sucesso a partir de dados simulados do Instagram.");
+    setInstagramFeedback("Promoção gerada com sucesso com base na análise manual do Instagram.");
     setTimeout(() => setInstagramFeedback(""), 1800);
   };
 
@@ -1671,14 +1723,12 @@ function App() {
 
         {activeSection === "instagram_oficial" ? (
           <section className="card">
-            <h2>Instagram Oficial</h2>
-            <p className="muted">Estrutura preparada para futura integração oficial com dados próprios.</p>
+            <h2>Instagram Oficial e Análise Manual</h2>
 
             <div className="subcard">
-              <h3>1. Instagram oficial do restaurante</h3>
+              <h3>Instagram oficial configurado</h3>
               <div className="info-stack">
                 <div className="info-item">
-                  <span>Instagram oficial configurado</span>
                   <strong>{normalizedOfficialInstagram}</strong>
                 </div>
               </div>
@@ -1687,134 +1737,237 @@ function App() {
                   Abrir Instagram
                 </a>
               </div>
-              <p className="hint">Estado de integração: Não conectado à API</p>
               <p className="muted">
-                Este perfil está configurado, mas a integração real com Instagram API ainda precisa de autenticação
-                oficial da Meta.
+                Este módulo usa o perfil oficial do restaurante e dados inseridos manualmente para ajudar a analisar
+                publicações e criar campanhas melhores.
               </p>
             </div>
 
             <div className="subcard">
-              <h3>Conexão oficial com Instagram API</h3>
-              <div className="instagram-connection">
-                <span
-                  className={`status-pill ${
-                    instagramApiStatus === "conectado"
-                      ? "connected"
-                      : instagramApiStatus === "simulado"
-                        ? "simulated"
-                        : "disconnected"
-                  }`}
-                >
-                  Estado atual: {instagramApiStatusLabel}
-                </span>
-              </div>
-              <div className="grid-two">
-                <button className="primary-btn" disabled type="button">
-                  Conectar Instagram via Meta
+              <h3>Análise manual do Instagram</h3>
+              <form className="form-grid" onSubmit={saveInstagramManualPost}>
+                <label>
+                  Data
+                  <input
+                    onChange={(event) => updateInstagramManualField("date", event.target.value)}
+                    required
+                    type="datetime-local"
+                    value={instagramManualForm.date}
+                  />
+                </label>
+
+                <label>
+                  Link da publicação
+                  <input
+                    onChange={(event) => updateInstagramManualField("link", event.target.value)}
+                    placeholder="https://www.instagram.com/..."
+                    type="url"
+                    value={instagramManualForm.link}
+                  />
+                </label>
+
+                <label>
+                  Tipo de conteúdo
+                  <select
+                    onChange={(event) => updateInstagramManualField("type", event.target.value)}
+                    value={instagramManualForm.type}
+                  >
+                    {instagramManualContentTypes.map((contentType) => (
+                      <option key={contentType}>{contentType}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  Prato mostrado
+                  <input
+                    onChange={(event) => updateInstagramManualField("dish", event.target.value)}
+                    placeholder="Ex.: Ropa vieja cubana"
+                    required
+                    type="text"
+                    value={instagramManualForm.dish}
+                  />
+                </label>
+
+                <label>
+                  Visualizações
+                  <input
+                    min="0"
+                    onChange={(event) => updateInstagramManualField("views", event.target.value)}
+                    type="number"
+                    value={instagramManualForm.views}
+                  />
+                </label>
+
+                <label>
+                  Curtidas
+                  <input
+                    min="0"
+                    onChange={(event) => updateInstagramManualField("likes", event.target.value)}
+                    type="number"
+                    value={instagramManualForm.likes}
+                  />
+                </label>
+
+                <label>
+                  Comentários
+                  <input
+                    min="0"
+                    onChange={(event) => updateInstagramManualField("comments", event.target.value)}
+                    type="number"
+                    value={instagramManualForm.comments}
+                  />
+                </label>
+
+                <label>
+                  Compartilhamentos
+                  <input
+                    min="0"
+                    onChange={(event) => updateInstagramManualField("shares", event.target.value)}
+                    type="number"
+                    value={instagramManualForm.shares}
+                  />
+                </label>
+
+                <label>
+                  Salvamentos
+                  <input
+                    min="0"
+                    onChange={(event) => updateInstagramManualField("saves", event.target.value)}
+                    type="number"
+                    value={instagramManualForm.saves}
+                  />
+                </label>
+
+                <label>
+                  Pedidos gerados
+                  <input
+                    min="0"
+                    onChange={(event) => updateInstagramManualField("orders", event.target.value)}
+                    type="number"
+                    value={instagramManualForm.orders}
+                  />
+                </label>
+
+                <label className="full-width">
+                  Observações
+                  <textarea
+                    onChange={(event) => updateInstagramManualField("notes", event.target.value)}
+                    placeholder="O que funcionou nessa publicação?"
+                    rows={3}
+                    value={instagramManualForm.notes}
+                  />
+                </label>
+
+                <button className="primary-btn full-width" type="submit">
+                  Salvar publicação manual
                 </button>
-                <button className="secondary-btn" onClick={enableInstagramApiSimulation} type="button">
-                  Ativar modo simulado
-                </button>
-              </div>
-              <div className="grid-two">
-                <button className="secondary-btn" onClick={clearInstagramApiSimulation} type="button">
-                  Marcar como não conectado
-                </button>
-              </div>
-              <p className="muted">Estado: Não conectado / Simulado / Conectado</p>
-              <p className="muted">
-                Para conectar dados reais, é necessário usar uma conta profissional do Instagram, autorização da Meta
-                e backend seguro.
-              </p>
-              <p className="hint">
-                O botão de conexão real está desativado nesta etapa para evitar qualquer impressão de integração
-                oficial sem autenticação.
-              </p>
+              </form>
+              {instagramManualFeedback ? <p className="hint">{instagramManualFeedback}</p> : null}
             </div>
 
             <div className="subcard">
-              <h3>2. Painel de métricas simuladas</h3>
+              <h3>Resultados da análise manual</h3>
               <div className="instagram-metrics-grid">
                 <article className="metric-card">
-                  <span>Publicações analisadas</span>
-                  <strong>{instagramMetrics.analyzedCount}</strong>
-                </article>
-                <article className="metric-card">
-                  <span>Reel com mais visualizações</span>
+                  <span>Publicação com melhor desempenho</span>
                   <strong>
-                    {instagramMetrics.topReel
-                      ? `${instagramMetrics.topReel.dish} (${instagramMetrics.topReel.views})`
+                    {instagramMetrics.topPerformancePost
+                      ? `${instagramMetrics.topPerformancePost.type} • ${instagramMetrics.topPerformancePost.dish}`
                       : "Sem dados"}
                   </strong>
                 </article>
                 <article className="metric-card">
-                  <span>Publicação com mais comentários</span>
-                  <strong>
-                    {instagramMetrics.topCommentsPost
-                      ? `${instagramMetrics.topCommentsPost.type} de ${instagramMetrics.topCommentsPost.dish} (${instagramMetrics.topCommentsPost.comments})`
-                      : "Sem dados"}
-                  </strong>
+                  <span>Tipo de conteúdo que mais funcionou</span>
+                  <strong>{instagramMetrics.topContentType}</strong>
                 </article>
                 <article className="metric-card">
-                  <span>Prato com melhor rendimento</span>
-                  <strong>{instagramMetrics.topDish}</strong>
+                  <span>Prato que mais gerou pedidos</span>
+                  <strong>{instagramMetrics.topDishByOrders}</strong>
                 </article>
                 <article className="metric-card">
-                  <span>Melhor dia para publicar</span>
-                  <strong>{instagramMetrics.bestDay}</strong>
+                  <span>Melhor horário observado</span>
+                  <strong>{instagramMetrics.bestObservedHourRange}</strong>
                 </article>
                 <article className="metric-card">
-                  <span>Melhor horário sugerido</span>
-                  <strong>{instagramMetrics.bestHourRange}</strong>
+                  <span>Recomendação do que publicar hoje</span>
+                  <strong>{instagramMetrics.recommendationToday}</strong>
                 </article>
               </div>
             </div>
 
             <div className="subcard">
-              <h3>3. Tabela de publicações</h3>
+              <h3>Publicações registradas manualmente</h3>
               <div className="table-wrap">
                 <table className="instagram-table">
                   <thead>
                     <tr>
                       <th>Data</th>
+                      <th>Link da publicação</th>
                       <th>Tipo</th>
                       <th>Prato mostrado</th>
                       <th>Visualizações</th>
-                      <th>Likes</th>
+                      <th>Curtidas</th>
                       <th>Comentários</th>
-                      <th>Guardados</th>
-                      <th>Compartilhados</th>
-                      <th>Pedidos gerados estimados</th>
+                      <th>Compartilhamentos</th>
+                      <th>Salvamentos</th>
+                      <th>Pedidos gerados</th>
+                      <th>Observações</th>
                       <th>Rendimento</th>
+                      <th>Ações</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {instagramPostsList.map((post) => (
+                    {instagramPostsList.map((post) => {
+                      const postPerformance =
+                        post.performance ||
+                        (calculateInstagramScore(post) >= 4500
+                          ? "alto"
+                          : calculateInstagramScore(post) >= 1800
+                            ? "médio"
+                            : "baixo");
+
+                      return (
                       <tr key={post.id}>
-                        <td>{post.date}</td>
+                        <td>{formatInstagramPostDate(post.date)}</td>
+                        <td>
+                          {post.link ? (
+                            <a href={post.link} rel="noreferrer" target="_blank">
+                              Ver
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
                         <td>{post.type}</td>
                         <td>{post.dish}</td>
                         <td>{post.views}</td>
                         <td>{post.likes}</td>
                         <td>{post.comments}</td>
-                        <td>{post.saves}</td>
                         <td>{post.shares}</td>
+                        <td>{post.saves}</td>
                         <td>{post.estimatedOrders}</td>
+                        <td>{post.notes || "-"}</td>
                         <td>
-                          <span className={`performance-pill ${performanceClassName(post.performance)}`}>
-                            {post.performance}
+                          <span className={`performance-pill ${performanceClassName(postPerformance)}`}>
+                            {postPerformance}
                           </span>
                         </td>
+                        <td>
+                          <button className="secondary-btn" onClick={() => removeInstagramManualPost(post.id)} type="button">
+                            Excluir
+                          </button>
+                        </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             </div>
 
             <div className="subcard">
-              <h3>4. Recomendações</h3>
+              <h3>Recomendações práticas</h3>
               <div className="recommendation-list">
                 {instagramRecommendations.map((recommendation, index) => (
                   <p key={`recommendation-${index}`}>• {recommendation}</p>
@@ -1823,7 +1976,7 @@ function App() {
             </div>
 
             <button className="primary-btn full-width" onClick={generateFromInstagramOfficial} type="button">
-              Gerar promoção baseada em dados simulados do Instagram
+              Gerar campanha com base na análise manual
             </button>
             {instagramFeedback ? <p className="hint">{instagramFeedback}</p> : null}
 

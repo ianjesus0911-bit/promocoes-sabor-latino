@@ -224,10 +224,23 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: none;
   border-color: #f4a75f;
   box-shadow: 0 0 0 3px rgba(255, 189, 102, 0.2);
+}
+
+textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem;
+  font-size: 0.93rem;
+  color: var(--text);
+  background: #fff;
+  font-family: inherit;
+  resize: vertical;
 }
 
 .full-width {
@@ -371,10 +384,16 @@ select:focus {
   border-color: #ffd4b0;
 }
 
-.status-pill.simulated {
+.status-pill.connecting {
   background: #fff9e8;
   color: #946100;
   border-color: #f0deac;
+}
+
+.status-pill.error {
+  background: #ffeceb;
+  color: #a92724;
+  border-color: #f4b4b2;
 }
 
 .instagram-metrics-grid {
