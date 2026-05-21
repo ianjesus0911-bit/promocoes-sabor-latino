@@ -749,6 +749,22 @@ function App() {
     setTimeout(() => setCampaignDayFeedback(""), 1800);
   };
 
+  const isWeakWhatsAppText = (value) => {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (!text) return true;
+
+    const compact = text.replace(/\s+/g, "");
+    if (/^[+()\d.\-]+$/.test(compact)) return true;
+
+    const words = text.split(/\s+/).filter(Boolean);
+    const hasSalesVerb = /(pe[çc]a|chame|mande|fale|garanta|aproveite|reserve|chama|pedir)/i.test(text);
+    const hasPhone = /\d{8,}/.test(text);
+
+    if (words.length < 8) return true;
+    if (hasPhone && !hasSalesVerb) return true;
+    return false;
+  };
+
   const generateIntelligentCampaignNow = async (payload = intelligentCampaignBuilder) => {
     setIntelligentCampaignLoading(true);
     try {
@@ -827,10 +843,13 @@ function App() {
           throw new Error("Resposta da IA veio fora do formato esperado.");
         }
 
+        const aiWhatsAppText = String(aiPayload.whatsapp || "").trim();
+        const finalWhatsAppText = isWeakWhatsAppText(aiWhatsAppText) ? localPack.whatsappText : aiWhatsAppText;
+
         finalPack = {
           ...localPack,
           strategyRecommended: `${localPack.strategyRecommended}\nConteúdo textual otimizado por IA para ampliar conversão agora.`,
-          whatsappText: aiPayload.whatsapp,
+          whatsappText: finalWhatsAppText,
           instagramStoryText: aiPayload.instagram_story,
           instagramFeedCaption: aiPayload.instagram_feed,
           facebookText: aiPayload.facebook,
@@ -843,7 +862,10 @@ function App() {
           finalWhatsAppCTA: aiPayload.cta_whatsapp,
           recommendationSourceNotice: `${localPack.recommendationSourceNotice} Conteúdo gerado por IA via Netlify Functions.`,
         };
-        feedbackMessage = "Campanha inteligente gerada com IA com sucesso!";
+        feedbackMessage =
+          finalWhatsAppText === aiWhatsAppText
+            ? "Campanha inteligente gerada com IA com sucesso!"
+            : "Campanha gerada com IA. O texto de WhatsApp foi reforçado automaticamente para manter alta conversão.";
       } catch (error) {
         const details = error instanceof Error ? error.message : "Falha ao gerar com IA.";
         console.warn("Falha na geração inteligente via IA:", details);

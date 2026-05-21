@@ -33,6 +33,8 @@ A **Campanha Inteligente** usa backend serverless para proteger a chave da OpenA
 - Não usar `VITE_OPENAI_API_KEY`.
 - A chave é lida apenas no backend com `process.env.OPENAI_API_KEY`.
 - Se a IA falhar ou a chave não existir, a app usa **fallback local** automaticamente para não quebrar o fluxo.
+- A função valida o campo `whatsapp` para evitar retorno fraco (ex.: só número de telefone).
+- O frontend também valida `whatsapp` e reforça automaticamente com texto completo se necessário.
 
 ---
 
