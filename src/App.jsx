@@ -388,14 +388,24 @@ function App() {
   const [intelligentCampaignLoading, setIntelligentCampaignLoading] = useState(false);
   const [campaignDayFeedback, setCampaignDayFeedback] = useState("");
   const [instagramFeedback, setInstagramFeedback] = useState("");
-  const [instagramProfileInput, setInstagramProfileInput] = useState(settings.instagramOfficial || "@saborlatino");
+  const [instagramProfileInput, setInstagramProfileInput] = useState(
+    settings.instagramOfficial || "@saborlatinobassano"
+  );
   const [instagramProfileError, setInstagramProfileError] = useState("");
 
   useEffect(() => {
     if (settings.instagramOfficial === undefined) {
       setSettings((current) => ({
         ...current,
-        instagramOfficial: "@saborlatino",
+        instagramOfficial: "@saborlatinobassano",
+      }));
+      return;
+    }
+
+    if (String(settings.instagramOfficial).toLowerCase() === "@saborlatino") {
+      setSettings((current) => ({
+        ...current,
+        instagramOfficial: "@saborlatinobassano",
       }));
       return;
     }
@@ -429,7 +439,8 @@ function App() {
   }, [settings.restaurantName]);
 
   const normalizedOfficialInstagram =
-    normalizeInstagramOfficialInput(settings.instagramOfficial || "@saborlatino").value || "@saborlatino";
+    normalizeInstagramOfficialInput(settings.instagramOfficial || "@saborlatinobassano").value ||
+    "@saborlatinobassano";
   const officialInstagramUsername = normalizedOfficialInstagram.replace(/^@/, "");
   const officialInstagramUrl = `https://www.instagram.com/${officialInstagramUsername}/`;
   const instagramApiStatus = instagramConnection?.apiStatus || "nao_conectado";
@@ -2278,7 +2289,7 @@ function App() {
                     if (instagramProfileError) setInstagramProfileError("");
                   }}
                   onKeyDown={handleInstagramOfficialKeyDown}
-                  placeholder="@saborlatino"
+                  placeholder="@saborlatinobassano"
                   type="text"
                   value={instagramProfileInput}
                 />

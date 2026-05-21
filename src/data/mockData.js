@@ -6,7 +6,7 @@ export const initialSettings = {
   address: "Avenida 23 de Maio, nÂº 313, Centro, Nova Bassano",
   featuredDish: "Ropa vieja cubana",
   openingHours: "Segunda a Domingo, 11h Ã s 23h",
-  instagramOfficial: "@saborlatino",
+  instagramOfficial: "@saborlatinobassano",
 };
 
 export const promotionTypes = [
