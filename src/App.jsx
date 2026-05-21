@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
   channels,
   fixedWhatsAppNumber,
@@ -175,8 +175,7 @@ const intelligentCampaignOutputFields = [
 ];
 
 const defaultInstagramConnection = {
-  connected: false,
-  account: "@saborlatino_demo",
+  apiStatus: "nao_conectado",
 };
 
 const defaultInstagramPosts = [
@@ -268,6 +267,88 @@ const instagramGeneratedFields = [
   { key: "videoIdea", title: "Ideia de vídeo curto" },
 ];
 
+const instagramApiStatusLabels = {
+  nao_conectado: "Não conectado",
+  simulado: "Simulado",
+  conectado: "Conectado",
+};
+
+const forbiddenInstagramPathKeywords = new Set([
+  "reel",
+  "reels",
+  "p",
+  "stories",
+  "tv",
+  "explore",
+  "accounts",
+  "direct",
+  "hashtags",
+  "locations",
+]);
+
+const normalizeInstagramOfficialInput = (rawValue) => {
+  const value = String(rawValue || "").trim();
+  if (!value) {
+    return { error: "Informe o Instagram oficial do restaurante." };
+  }
+
+  let normalizedValue = value;
+  if (/^(instagram\.com|www\.instagram\.com)\//i.test(normalizedValue)) {
+    normalizedValue = `https://${normalizedValue}`;
+  }
+
+  const isUrlValue = /^https?:\/\//i.test(normalizedValue);
+  let username = normalizedValue;
+
+  if (isUrlValue) {
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(normalizedValue);
+    } catch (error) {
+      return { error: "Link inválido. Use @usuario, usuario ou link do perfil do Instagram." };
+    }
+
+    const host = parsedUrl.hostname.toLowerCase();
+    if (host !== "instagram.com" && host !== "www.instagram.com") {
+      return { error: "Use apenas links de instagram.com para o perfil oficial." };
+    }
+
+    if (parsedUrl.search || parsedUrl.hash) {
+      return { error: "Remova parâmetros do link. Use apenas o endereço limpo do perfil." };
+    }
+
+    const segments = parsedUrl.pathname.split("/").filter(Boolean);
+    if (!segments.length) {
+      return { error: "Link incompleto. Informe o usuário do perfil do Instagram." };
+    }
+
+    const hasForbiddenSegment = segments.some((segment) => forbiddenInstagramPathKeywords.has(segment.toLowerCase()));
+    if (hasForbiddenSegment || segments.length !== 1) {
+      return { error: "Use apenas link do perfil. Links de reel, post e stories não são aceitos." };
+    }
+
+    username = segments[0];
+  } else {
+    username = normalizedValue.replace(/^@+/, "").trim();
+    if (username.includes("/") || username.includes("?") || username.includes("#")) {
+      return { error: "Use @usuario, usuario ou link direto do perfil do Instagram." };
+    }
+  }
+
+  if (!username) {
+    return { error: "Informe um usuário válido do Instagram." };
+  }
+
+  if (forbiddenInstagramPathKeywords.has(username.toLowerCase())) {
+    return { error: "Esse valor não parece um usuário de perfil. Informe apenas o @usuario oficial." };
+  }
+
+  if (!/^[A-Za-z0-9._]{1,30}$/.test(username)) {
+    return { error: "Usuário inválido. Use apenas letras, números, ponto ou sublinhado." };
+  }
+
+  return { value: `@${username.toLowerCase()}` };
+};
 function App() {
   const [activeSection, setActiveSection] = useState("inicio");
   const [settings, setSettings] = usePersistentState("promocoes.settings", initialSettings);
@@ -307,10 +388,53 @@ function App() {
   const [intelligentCampaignLoading, setIntelligentCampaignLoading] = useState(false);
   const [campaignDayFeedback, setCampaignDayFeedback] = useState("");
   const [instagramFeedback, setInstagramFeedback] = useState("");
+  const [instagramProfileInput, setInstagramProfileInput] = useState(settings.instagramOfficial || "@saborlatino");
+  const [instagramProfileError, setInstagramProfileError] = useState("");
+
+  useEffect(() => {
+    if (settings.instagramOfficial === undefined) {
+      setSettings((current) => ({
+        ...current,
+        instagramOfficial: "@saborlatino",
+      }));
+      return;
+    }
+
+    const parsed = normalizeInstagramOfficialInput(settings.instagramOfficial || "");
+    if (parsed.value && parsed.value !== settings.instagramOfficial) {
+      setSettings((current) => ({
+        ...current,
+        instagramOfficial: parsed.value,
+      }));
+      return;
+    }
+
+    setInstagramProfileInput(settings.instagramOfficial || "");
+    if (parsed.error) {
+      setInstagramProfileError(parsed.error);
+      return;
+    }
+
+    setInstagramProfileError("");
+  }, [settings.instagramOfficial, setSettings]);
+
+  useEffect(() => {
+    if (typeof instagramConnection?.apiStatus === "string") return;
+    const migratedStatus = instagramConnection?.connected ? "simulado" : "nao_conectado";
+    setInstagramConnection({ apiStatus: migratedStatus });
+  }, [instagramConnection, setInstagramConnection]);
 
   const openingMessage = useMemo(() => {
     return `Olá! Quero ver as promoções de hoje do ${settings.restaurantName}.`;
   }, [settings.restaurantName]);
+
+  const normalizedOfficialInstagram =
+    normalizeInstagramOfficialInput(settings.instagramOfficial || "@saborlatino").value || "@saborlatino";
+  const officialInstagramUsername = normalizedOfficialInstagram.replace(/^@/, "");
+  const officialInstagramUrl = `https://www.instagram.com/${officialInstagramUsername}/`;
+  const instagramApiStatus = instagramConnection?.apiStatus || "nao_conectado";
+  const instagramApiStatusLabel = instagramApiStatusLabels[instagramApiStatus] || instagramApiStatusLabels.nao_conectado;
+  const isInstagramApiConnected = instagramApiStatus === "conectado";
 
   const selectedInspiration = useMemo(() => {
     return inspirations.find((item) => item.id === imageBuilder.selectedInspirationId) || null;
@@ -610,7 +734,7 @@ function App() {
 
       let insights = simulatedInsights;
 
-      if (instagramConnection.connected) {
+      if (isInstagramApiConnected) {
         try {
           insights = await fetchRealInstagramInsights(payload);
         } catch (error) {
@@ -960,12 +1084,39 @@ function App() {
     setSettings((current) => ({ ...current, [field]: value }));
   };
 
-  const connectInstagramDemo = () => {
-    setInstagramConnection({ connected: true, account: "@saborlatino_demo" });
+  const saveInstagramOfficialSetting = () => {
+    const parsed = normalizeInstagramOfficialInput(instagramProfileInput);
+    if (parsed.error) {
+      setInstagramProfileError(parsed.error);
+      return false;
+    }
+
+    setSettings((current) => ({
+      ...current,
+      instagramOfficial: parsed.value,
+    }));
+    setInstagramProfileInput(parsed.value);
+    setInstagramProfileError("");
+    return true;
   };
 
-  const disconnectInstagramDemo = () => {
-    setInstagramConnection({ connected: false, account: "@saborlatino_demo" });
+  const handleInstagramOfficialBlur = () => {
+    saveInstagramOfficialSetting();
+  };
+
+  const handleInstagramOfficialKeyDown = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      saveInstagramOfficialSetting();
+    }
+  };
+
+  const enableInstagramApiSimulation = () => {
+    setInstagramConnection({ apiStatus: "simulado" });
+  };
+
+  const clearInstagramApiSimulation = () => {
+    setInstagramConnection({ apiStatus: "nao_conectado" });
   };
 
   const copyAllInstagramOfficial = () => {
@@ -1037,7 +1188,7 @@ function App() {
       ...current,
     ]);
 
-    setInstagramFeedback("Promoção baseada no Instagram gerada com sucesso!");
+    setInstagramFeedback("Promoção gerada com sucesso a partir de dados simulados do Instagram.");
     setTimeout(() => setInstagramFeedback(""), 1800);
   };
 
@@ -1513,22 +1664,62 @@ function App() {
             <p className="muted">Estrutura preparada para futura integração oficial com dados próprios.</p>
 
             <div className="subcard">
-              <h3>1. Estado de conexão</h3>
+              <h3>1. Instagram oficial do restaurante</h3>
+              <div className="info-stack">
+                <div className="info-item">
+                  <span>Instagram oficial configurado</span>
+                  <strong>{normalizedOfficialInstagram}</strong>
+                </div>
+              </div>
+              <div className="grid-two">
+                <a className="secondary-btn" href={officialInstagramUrl} rel="noreferrer" target="_blank">
+                  Abrir Instagram
+                </a>
+              </div>
+              <p className="hint">Estado de integração: Não conectado à API</p>
+              <p className="muted">
+                Este perfil está configurado, mas a integração real com Instagram API ainda precisa de autenticação
+                oficial da Meta.
+              </p>
+            </div>
+
+            <div className="subcard">
+              <h3>Conexão oficial com Instagram API</h3>
               <div className="instagram-connection">
-                <span className={instagramConnection.connected ? "status-pill connected" : "status-pill disconnected"}>
-                  {instagramConnection.connected
-                    ? `Conta conectada: ${instagramConnection.account}`
-                    : "Não conectado"}
+                <span
+                  className={`status-pill ${
+                    instagramApiStatus === "conectado"
+                      ? "connected"
+                      : instagramApiStatus === "simulado"
+                        ? "simulated"
+                        : "disconnected"
+                  }`}
+                >
+                  Estado atual: {instagramApiStatusLabel}
                 </span>
               </div>
               <div className="grid-two">
-                <button className="primary-btn" onClick={connectInstagramDemo} type="button">
-                  Conectar Instagram
+                <button className="primary-btn" disabled type="button">
+                  Conectar Instagram via Meta
                 </button>
-                <button className="secondary-btn" onClick={disconnectInstagramDemo} type="button">
-                  Desconectar (simulado)
+                <button className="secondary-btn" onClick={enableInstagramApiSimulation} type="button">
+                  Ativar modo simulado
                 </button>
               </div>
+              <div className="grid-two">
+                <button className="secondary-btn" onClick={clearInstagramApiSimulation} type="button">
+                  Marcar como não conectado
+                </button>
+              </div>
+              <p className="muted">Estado: Não conectado / Simulado / Conectado</p>
+              <p className="muted">
+                Para conectar dados reais, é necessário usar uma conta profissional do Instagram, autorização da Meta
+                e backend seguro.
+              </p>
+              <p className="hint">
+                O botão de conexão real está desativado nesta etapa para evitar qualquer impressão de integração
+                oficial sem autenticação.
+              </p>
             </div>
 
             <div className="subcard">
@@ -1621,7 +1812,7 @@ function App() {
             </div>
 
             <button className="primary-btn full-width" onClick={generateFromInstagramOfficial} type="button">
-              Gerar promoção baseada no Instagram
+              Gerar promoção baseada em dados simulados do Instagram
             </button>
             {instagramFeedback ? <p className="hint">{instagramFeedback}</p> : null}
 
@@ -1650,14 +1841,6 @@ function App() {
               </>
             ) : null}
 
-            <div className="subcard">
-              <h3>Integração futura</h3>
-              <p className="muted">
-                Esta área está preparada para futura integração oficial com Instagram Graph API. Para conectar dados
-                reais, será necessário usar uma conta profissional do Instagram, uma página do Facebook conectada,
-                permissões da Meta e um backend seguro.
-              </p>
-            </div>
           </section>
         ) : null}
 
@@ -2086,6 +2269,32 @@ function App() {
                 />
               </label>
 
+              <label className="full-width">
+                Instagram oficial do restaurante
+                <input
+                  onBlur={handleInstagramOfficialBlur}
+                  onChange={(event) => {
+                    setInstagramProfileInput(event.target.value);
+                    if (instagramProfileError) setInstagramProfileError("");
+                  }}
+                  onKeyDown={handleInstagramOfficialKeyDown}
+                  placeholder="@saborlatino"
+                  type="text"
+                  value={instagramProfileInput}
+                />
+              </label>
+
+              <div className="full-width">
+                <button className="secondary-btn" onClick={saveInstagramOfficialSetting} type="button">
+                  Salvar Instagram oficial
+                </button>
+                {instagramProfileError ? <p className="input-error">{instagramProfileError}</p> : null}
+                <p className="hint">
+                  Formatos aceitos: @usuario, usuario, https://instagram.com/usuario ou
+                  https://www.instagram.com/usuario/
+                </p>
+              </div>
+
               <label>
                 Prato destacado
                 <input
@@ -2118,4 +2327,5 @@ function App() {
 }
 
 export default App;
+
 

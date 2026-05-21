@@ -167,6 +167,12 @@ p {
   color: #fff;
 }
 
+.primary-btn:disabled,
+.secondary-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .secondary-btn {
   background: #fff2e4;
   border: 1px solid #ffd5ab;
@@ -182,6 +188,13 @@ p {
   margin-top: 0.6rem;
   color: var(--muted);
   font-size: 0.83rem;
+}
+
+.input-error {
+  margin-top: 0.5rem;
+  color: #b13a24;
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
 .form-grid {
@@ -356,6 +369,12 @@ select:focus {
   background: #fff1e6;
   color: #a34c1b;
   border-color: #ffd4b0;
+}
+
+.status-pill.simulated {
+  background: #fff9e8;
+  color: #946100;
+  border-color: #f0deac;
 }
 
 .instagram-metrics-grid {
