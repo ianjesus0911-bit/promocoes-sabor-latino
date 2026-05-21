@@ -1,23 +1,23 @@
-﻿export const fixedWhatsAppNumber = "+55 54 8100-7256";
+export const fixedWhatsAppNumber = "+55 54 8100-7256";
 
 export const initialSettings = {
   restaurantName: "Sabor Latino",
   whatsappNumber: "+55 54 8100-7256",
-  address: "Avenida 23 de Maio, nÂº 313, Centro, Nova Bassano",
+  address: "Avenida 23 de Maio, nº 313, Centro, Nova Bassano",
   featuredDish: "Ropa vieja cubana",
-  openingHours: "Segunda a Domingo, 11h Ã s 23h",
+  openingHours: "Terça a domingo, 11h às 23h",
   instagramOfficial: "@saborlatinobassano",
 };
 
 export const promotionTypes = [
-  "AlmoÃ§o",
+  "Almoço",
   "Pizza",
   "Ropa vieja cubana",
   "Combo familiar",
   "Sobremesa",
-  "PromoÃ§Ã£o relÃ¢mpago",
-  "Ãšltimas unidades",
-  "PromoÃ§Ã£o para hoje",
+  "Promoção relâmpago",
+  "Últimas unidades",
+  "Promoção para hoje",
 ];
 
 export const channels = [
@@ -34,8 +34,8 @@ export const tones = ["Urgente", "Familiar", "Alegre", "Elegante", "Caseiro", "D
 export const quickActions = [
   {
     id: "qa1",
-    label: "Vender almoÃ§o hoje",
-    type: "AlmoÃ§o",
+    label: "Vender almoço hoje",
+    type: "Almoço",
     channel: "Todos",
     tone: "Direto para vender",
   },
@@ -55,15 +55,15 @@ export const quickActions = [
   },
   {
     id: "qa4",
-    label: "PromoÃ§Ã£o de Ãºltima hora",
-    type: "PromoÃ§Ã£o relÃ¢mpago",
+    label: "Promoção de última hora",
+    type: "Promoção relâmpago",
     channel: "WhatsApp",
     tone: "Urgente",
   },
   {
     id: "qa5",
     label: "Chamar clientes para o restaurante",
-    type: "PromoÃ§Ã£o para hoje",
+    type: "Promoção para hoje",
     channel: "Facebook",
     tone: "Familiar",
   },
@@ -77,14 +77,14 @@ export const quickActions = [
   {
     id: "qa7",
     label: "Criar mensagem para status do WhatsApp",
-    type: "Ãšltimas unidades",
+    type: "Últimas unidades",
     channel: "Instagram Story",
     tone: "Direto para vender",
   },
 ];
 
 export const imageProducts = [
-  "AlmoÃ§o latino",
+  "Almoço latino",
   "Pizza cubana",
   "Ropa vieja cubana",
   "Combo familiar",
@@ -113,7 +113,7 @@ export const imageStyles = [
 
 export const imageGoals = [
   "Dar fome",
-  "Vender rÃ¡pido",
+  "Vender rápido",
   "Atrair clientes para o restaurante",
   "Promover prato do dia",
   "Promover pizza",
@@ -122,13 +122,13 @@ export const imageGoals = [
 
 export const inspirationPlatforms = ["Instagram", "TikTok", "Facebook"];
 
-export const inspirationContentTypes = ["Reel", "Story", "Feed", "Foto", "VÃ­deo curto"];
+export const inspirationContentTypes = ["Reel", "Story", "Feed", "Foto", "Vídeo curto"];
 
 export const inspirationNiches = [
   "comida latina",
   "comida cubana",
   "pizza",
-  "almoÃ§o",
+  "almoço",
   "sobremesa",
   "restaurante familiar",
 ];
@@ -142,4 +142,3 @@ export const inspirationVisualElements = [
   "prato abundante",
   "bebida gelada",
 ];
-

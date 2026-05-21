@@ -23,7 +23,7 @@ import {
   generateIntelligentCampaignPack,
 } from "./utils/intelligentCampaignGenerator";
 import { generatePromotionPack } from "./utils/promoGenerator";
-import { buildFixedWhatsAppLink, FIXED_WHATSAPP_DISPLAY } from "./utils/whatsapp";
+import { buildFixedWhatsAppLink, buildWhatsAppLink, FIXED_WHATSAPP_DISPLAY } from "./utils/whatsapp";
 
 const sections = [
   { id: "inicio", label: "Início" },
@@ -189,6 +189,88 @@ const outputFields = [
   { key: "videoScript", title: "Roteiro de vídeo (8 a 10 segundos)" },
   { key: "hashtags", title: "Hashtags" },
 ];
+
+const quickOutputFields = [
+  { key: "whatsappText", title: "Mensagem para WhatsApp" },
+  { key: "instagramStoryText", title: "Texto para Story de Instagram" },
+  { key: "facebookText", title: "Texto para Facebook" },
+  { key: "imagePhrase", title: "Frase para imagem" },
+  { key: "hashtags", title: "Hashtags" },
+  { key: "ctaWhatsapp", title: "CTA para WhatsApp" },
+];
+
+const quickActionConfigs = {
+  qa1: {
+    product: "almoço",
+    objective: "vender pelo WhatsApp",
+    audience: "trabalhadores",
+    moment: "almoço",
+    tone: "direto",
+    mainChannel: "WhatsApp",
+    instruction:
+      "Foco em almoço de hoje. Mensagem curta e direta para vender pelo WhatsApp.",
+  },
+  qa2: {
+    product: "pizza",
+    objective: "vender pelo WhatsApp",
+    audience: "clientes de pizza",
+    moment: "noite",
+    tone: "alegre",
+    mainChannel: "Todos",
+    instruction:
+      "Foco em pizza cubana à noite, queijo puxando, comida quente e pedido no WhatsApp.",
+  },
+  qa3: {
+    product: "ropa vieja cubana",
+    objective: "divulgar comida cubana",
+    audience: "famílias",
+    moment: "almoço",
+    tone: "caseiro",
+    mainChannel: "Instagram Feed",
+    instruction:
+      "Foco em prato típico cubano, sabor caseiro, Sabor Latino e Nova Bassano.",
+  },
+  qa4: {
+    product: "combo familiar",
+    objective: "vender rápido",
+    audience: "clientes locais",
+    moment: "noite",
+    tone: "urgente",
+    mainChannel: "WhatsApp",
+    instruction:
+      "Urgência realista: últimas unidades, saindo agora, reserve pelo WhatsApp. Não inventar desconto.",
+  },
+  qa5: {
+    product: "almoço",
+    objective: "atrair clientes ao restaurante",
+    audience: "famílias",
+    moment: "noite",
+    tone: "familiar",
+    mainChannel: "Facebook",
+    instruction:
+      "Foco em levar pessoas ao local. Mencionar Sabor Latino e Nova Bassano com tom próximo.",
+  },
+  qa6: {
+    product: "ropa vieja cubana",
+    objective: "divulgar comida cubana",
+    audience: "famílias",
+    moment: "almoço",
+    tone: "familiar",
+    mainChannel: "Instagram Feed",
+    instruction:
+      "Post de domingo com almoço em família e comida cubana. Restaurante abre de terça a domingo e fecha na segunda.",
+  },
+  qa7: {
+    product: "almoço",
+    objective: "vender pelo WhatsApp",
+    audience: "clientes locais",
+    moment: "almoço",
+    tone: "direto",
+    mainChannel: "WhatsApp",
+    instruction:
+      "Criar mensagem curta para Status do WhatsApp, no máximo 2 linhas, natural e com chamada clara para pedir ou visitar.",
+  },
+};
 
 const imageOutputFields = [
   { key: "fullPrompt", title: "Prompt completo para imagem" },
@@ -498,6 +580,9 @@ function App() {
   const [intelligentCampaignFeedback, setIntelligentCampaignFeedback] = useState("");
   const [intelligentCampaignLoading, setIntelligentCampaignLoading] = useState(false);
   const [campaignDayFeedback, setCampaignDayFeedback] = useState("");
+  const [quickGenerated, setQuickGenerated] = useState(null);
+  const [quickLoading, setQuickLoading] = useState(false);
+  const [quickFeedback, setQuickFeedback] = useState("");
   const [instagramFeedback, setInstagramFeedback] = useState("");
   const [instagramManualFeedback, setInstagramManualFeedback] = useState("");
   const [instagramProfileInput, setInstagramProfileInput] = useState(
@@ -770,6 +855,100 @@ function App() {
     imagePrompt: payload.imagePrompt || "",
     isFavorite: false,
   });
+
+  const toTwoLines = (text) => {
+    const clean = String(text || "").replace(/\r/g, "").trim();
+    if (!clean) return "";
+    const lines = clean.split("\n").map((line) => line.trim()).filter(Boolean);
+    if (lines.length <= 2) return lines.join("\n");
+    return `${lines[0]}\n${lines[1]}`;
+  };
+
+  const buildQuickFallbackPack = (action) => {
+    const restaurantName = settings.restaurantName || "Sabor Latino";
+    const whatsapp = settings.whatsappNumber || FIXED_WHATSAPP_DISPLAY;
+    const baseData = {
+      hashtags: "#SaborLatino #NovaBassano #PedidoNoWhatsApp #ComidaLatina #ComidaCubana",
+      ctaWhatsapp: `Chama no WhatsApp ${whatsapp} e faz seu pedido agora.`,
+    };
+
+    if (action.id === "qa1") {
+      return {
+        ...baseData,
+        whatsappText: `Almoço quentinho saindo agora no ${restaurantName} 🍛
+Quer comer bem hoje? Chama no WhatsApp ${whatsapp} e já separa seu pedido.`,
+        instagramStoryText: "Almoço caseiro, quente e pronto agora.",
+        facebookText: `Hora de almoço em Nova Bassano com comida bem feita no ${restaurantName}. Passe aqui ou peça no WhatsApp ${whatsapp}.`,
+        imagePhrase: "Almoço de hoje saindo agora",
+      };
+    }
+
+    if (action.id === "qa2") {
+      return {
+        ...baseData,
+        whatsappText: `Pizza cubana quentinha no forno agora 🍕
+Queijo puxando e sabor forte da casa. Chama no WhatsApp ${whatsapp} para pedir.`,
+        instagramStoryText: "Noite de pizza cubana quentinha.",
+        facebookText: `Hoje é dia de pizza cubana no ${restaurantName}, em Nova Bassano. Pedido rápido no WhatsApp ${whatsapp}.`,
+        imagePhrase: "Pizza cubana quente e queijo puxando",
+      };
+    }
+
+    if (action.id === "qa3") {
+      return {
+        ...baseData,
+        whatsappText: `Hoje tem ropa vieja cubana de verdade no ${restaurantName}.
+Sabor caseiro, carne desfiada no ponto e prato quentinho. Peça no WhatsApp ${whatsapp}.`,
+        instagramStoryText: "Ropa vieja cubana, sabor de casa.",
+        facebookText: `Nova Bassano já conhece: a ropa vieja cubana do ${restaurantName} é feita com cuidado e sabor marcante. Chama no WhatsApp ${whatsapp}.`,
+        imagePhrase: "Ropa vieja cubana da casa",
+      };
+    }
+
+    if (action.id === "qa4") {
+      return {
+        ...baseData,
+        whatsappText: `Últimas unidades saindo agora no ${restaurantName} 🚨
+Se você quer garantir o seu, reserve no WhatsApp ${whatsapp}.`,
+        instagramStoryText: "Últimas unidades. Saindo agora.",
+        facebookText: `Promoção de última hora em Nova Bassano: últimas unidades disponíveis agora. Reserve pelo WhatsApp ${whatsapp}.`,
+        imagePhrase: "Últimas unidades saindo agora",
+      };
+    }
+
+    if (action.id === "qa5") {
+      return {
+        ...baseData,
+        whatsappText: `Vem pro ${restaurantName} hoje com a família.
+Mesa pronta, comida cubana e latina bem servida em Nova Bassano. Chama no WhatsApp ${whatsapp}.`,
+        instagramStoryText: "Hoje é dia de vir ao Sabor Latino.",
+        facebookText: `Família reunida e comida boa em Nova Bassano: te esperamos no ${restaurantName}. Se preferir, peça no WhatsApp ${whatsapp}.`,
+        imagePhrase: "Hoje tem mesa pronta no Sabor Latino",
+      };
+    }
+
+    if (action.id === "qa6") {
+      return {
+        ...baseData,
+        whatsappText: `Domingo é dia de almoço em família no ${restaurantName}.
+Comida cubana e latina feita com carinho. Estamos abertos de terça a domingo. Reserve no WhatsApp ${whatsapp}.`,
+        instagramStoryText: "Domingo de almoço cubano em família.",
+        facebookText: `Domingo combina com mesa cheia no ${restaurantName}. Estamos em Nova Bassano, abertos de terça a domingo. Chama no WhatsApp ${whatsapp}.`,
+        imagePhrase: "Domingo com comida cubana em família",
+      };
+    }
+
+    return {
+      ...baseData,
+      whatsappText: toTwoLines(
+        `Saindo pedido quentinho agora no ${restaurantName}.
+Chama no WhatsApp ${whatsapp} e peça o seu.`
+      ),
+      instagramStoryText: "Chama no WhatsApp e pede agora.",
+      facebookText: `Pedido rápido no ${restaurantName}, em Nova Bassano. Chama no WhatsApp ${whatsapp}.`,
+      imagePhrase: "Pedido rápido pelo WhatsApp",
+    };
+  };
 
   const generateNow = (payload = builder) => {
     const pack = generatePromotionPack({
@@ -1250,12 +1429,143 @@ function App() {
     }
   };
 
-  const runQuickAction = (action) => {
-    generateNow({
-      promotionType: action.type,
-      channel: action.channel,
-      tone: action.tone,
+  const runQuickAction = async (action) => {
+    setQuickLoading(true);
+    setQuickFeedback("Gerando promoção...");
+    setQuickGenerated(null);
+
+    const config = quickActionConfigs[action.id] || quickActionConfigs.qa1;
+    const fallbackPack = buildQuickFallbackPack(action);
+    const shouldUseTwoLineStatus = action.id === "qa7";
+
+    let finalPack = fallbackPack;
+    let usedFallback = false;
+    let timeoutId;
+
+    const applyStatusRule = (textValue) => {
+      const clean = String(textValue || "").trim();
+      if (!shouldUseTwoLineStatus) return clean;
+      return toTwoLines(clean);
+    };
+
+    try {
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 12000);
+
+      const response = await fetch("/.netlify/functions/generate-campaign", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          form: {
+            product: config.product,
+            objective: config.objective,
+            audience: config.audience,
+            moment: config.moment,
+            tone: config.tone,
+            mainChannel: config.mainChannel,
+            quickAction: action.label,
+          },
+          settings: {
+            restaurantName: settings.restaurantName,
+            whatsappNumber: settings.whatsappNumber,
+            address: settings.address,
+            featuredDish: settings.featuredDish,
+            openingHours: settings.openingHours,
+          },
+          insights: {
+            quickActionId: action.id,
+            quickActionLabel: action.label,
+            recommendation: config.instruction,
+            weeklyContext:
+              "Sabor Latino abre de terça a domingo e fica fechado às segundas-feiras.",
+          },
+        }),
+      });
+
+      const aiPayload = await response.json().catch(() => ({}));
+      const requiredKeys = [
+        "whatsapp",
+        "instagram_feed",
+        "instagram_story",
+        "facebook",
+        "tiktok",
+        "frase_imagem",
+        "prompt_imagem",
+        "roteiro_video",
+        "hashtags",
+        "horario_sugerido",
+        "cta_whatsapp",
+      ];
+
+      if (!response.ok) {
+        const message =
+          typeof aiPayload?.error === "string"
+            ? aiPayload.error
+            : "Não foi possível gerar a promoção com IA.";
+        throw new Error(message);
+      }
+
+      const validPayload = requiredKeys.every((key) => typeof aiPayload?.[key] === "string");
+      if (!validPayload) {
+        throw new Error("Resposta da IA fora do formato esperado.");
+      }
+
+      const safeWhatsApp = isWeakWhatsAppText(aiPayload.whatsapp)
+        ? fallbackPack.whatsappText
+        : String(aiPayload.whatsapp || "").trim();
+      const safeStory = applyStatusRule(
+        shouldUseTwoLineStatus
+          ? String(aiPayload.instagram_story || "").trim()
+          : clampStoryToEightWords(aiPayload.instagram_story, fallbackPack.instagramStoryText)
+      );
+
+      finalPack = {
+        whatsappText: safeWhatsApp,
+        instagramStoryText: safeStory || fallbackPack.instagramStoryText,
+        facebookText: String(aiPayload.facebook || "").trim() || fallbackPack.facebookText,
+        imagePhrase: String(aiPayload.frase_imagem || "").trim() || fallbackPack.imagePhrase,
+        hashtags: normalizeHashtagsToFive(aiPayload.hashtags, fallbackPack.hashtags),
+        ctaWhatsapp: String(aiPayload.cta_whatsapp || "").trim() || fallbackPack.ctaWhatsapp,
+      };
+    } catch (error) {
+      usedFallback = true;
+      finalPack = fallbackPack;
+      console.warn("Falha na geração de promoção rápida com IA:", error);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      setQuickLoading(false);
+    }
+
+    setQuickGenerated({
+      ...finalPack,
+      actionId: action.id,
+      actionLabel: action.label,
+      createdAt: new Date().toLocaleString("pt-BR"),
     });
+
+    setHistoryItems((current) => [
+      createHistoryRecord({
+        promotionType: `Rápida: ${action.label}`,
+        channel: action.channel,
+        tone: action.tone,
+        whatsappText: finalPack.whatsappText,
+        instagramText: finalPack.instagramStoryText,
+        facebookText: finalPack.facebookText,
+        hashtags: finalPack.hashtags,
+        videoScript: "",
+        imagePrompt: "",
+      }),
+      ...current,
+    ]);
+
+    setQuickFeedback(
+      usedFallback
+        ? "Não foi possível usar IA agora. Geramos uma versão rápida para você."
+        : "Promoção gerada com IA com sucesso!"
+    );
   };
 
   const copyText = async (key, value) => {
@@ -1280,6 +1590,12 @@ function App() {
   const buildAllTexts = (content) => {
     return outputFields
       .map((field) => `${field.title}\n${content[field.key]}`)
+      .join("\n\n------------------------------\n\n");
+  };
+
+  const buildAllQuickTexts = (content) => {
+    return quickOutputFields
+      .map((field) => `${field.title}\n${content[field.key] || ""}`)
       .join("\n\n------------------------------\n\n");
   };
 
@@ -1330,6 +1646,11 @@ function App() {
     copyText("all_campaign_day", buildAllCampaignDayTexts(campaignDayGenerated));
   };
 
+  const copyAllQuickTexts = () => {
+    if (!quickGenerated) return;
+    copyText("all_quick_texts", buildAllQuickTexts(quickGenerated));
+  };
+
   const copyAllIntelligentCampaignTexts = () => {
     if (!intelligentCampaignGenerated) return;
     copyText("all_intelligent_campaign", buildAllIntelligentCampaignTexts(intelligentCampaignGenerated));
@@ -1343,6 +1664,12 @@ function App() {
   const openWhatsAppWithIntelligentCampaign = () => {
     if (!intelligentCampaignGenerated) return;
     window.open(buildFixedWhatsAppLink(intelligentCampaignGenerated.whatsappText), "_blank", "noreferrer");
+  };
+
+  const openWhatsAppWithQuickGenerated = () => {
+    if (!quickGenerated) return;
+    const message = `${quickGenerated.whatsappText}\n${quickGenerated.ctaWhatsapp || ""}`.trim();
+    window.open(buildWhatsAppLink(settings.whatsappNumber, message), "_blank", "noreferrer");
   };
 
   const saveGeneratedAsFavorite = () => {
@@ -2997,11 +3324,49 @@ function App() {
 
             <div className="quick-grid">
               {quickActions.map((action) => (
-                <button className="quick-btn" key={action.id} onClick={() => runQuickAction(action)} type="button">
+                <button
+                  className="quick-btn"
+                  disabled={quickLoading}
+                  key={action.id}
+                  onClick={() => runQuickAction(action)}
+                  type="button"
+                >
                   {action.label}
                 </button>
               ))}
             </div>
+
+            {quickLoading ? <p className="hint">Gerando promoção...</p> : null}
+            {quickFeedback ? <p className="hint">{quickFeedback}</p> : null}
+
+            {quickGenerated ? (
+              <>
+                <div className="grid-two">
+                  <button className="secondary-btn" onClick={copyAllQuickTexts} type="button">
+                    {copiedKey === "all_quick_texts" ? "Tudo copiado!" : "Copiar tudo"}
+                  </button>
+                  <button className="whatsapp-btn" onClick={openWhatsAppWithQuickGenerated} type="button">
+                    Enviar no WhatsApp
+                  </button>
+                </div>
+
+                <div className="outputs-grid">
+                  {quickOutputFields.map((field) => (
+                    <article className="output-card" key={field.key}>
+                      <h3>{field.title}</h3>
+                      <p>{quickGenerated[field.key] || "Não gerado."}</p>
+                      <button
+                        className="secondary-btn"
+                        onClick={() => copyText(`quick_${field.key}`, quickGenerated[field.key] || "")}
+                        type="button"
+                      >
+                        {copiedKey === `quick_${field.key}` ? "Copiado!" : "Copiar"}
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </section>
         ) : null}
 
