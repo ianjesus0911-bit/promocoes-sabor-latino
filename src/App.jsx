@@ -2106,6 +2106,7 @@ function App() {
                 </select>
               </label>
 
+              <p className="mini-calendar-title">Mini calendário semanal</p>
               <div className="week-mini-calendar">
                 {weekPlannerDays.map((day) => {
                   const hasCampaign = Boolean(latestCampaignByWeekDay[day.id]);
@@ -2159,6 +2160,7 @@ function App() {
               <label>
                 Produto principal
                 <select
+                  disabled={isCampaignDayClosed}
                   onChange={(event) => updateCampaignDayBuilderField("product", event.target.value)}
                   value={campaignDayBuilder.product}
                 >
@@ -2171,6 +2173,7 @@ function App() {
               <label>
                 Objetivo
                 <select
+                  disabled={isCampaignDayClosed}
                   onChange={(event) => updateCampaignDayBuilderField("objective", event.target.value)}
                   value={campaignDayBuilder.objective}
                 >
@@ -2183,6 +2186,7 @@ function App() {
               <label>
                 Momento do dia
                 <select
+                  disabled={isCampaignDayClosed}
                   onChange={(event) => updateCampaignDayBuilderField("moment", event.target.value)}
                   value={campaignDayBuilder.moment}
                 >
@@ -2195,6 +2199,7 @@ function App() {
               <label>
                 Tom
                 <select
+                  disabled={isCampaignDayClosed}
                   onChange={(event) => updateCampaignDayBuilderField("tone", event.target.value)}
                   value={campaignDayBuilder.tone}
                 >
@@ -2207,6 +2212,7 @@ function App() {
               <label>
                 Quantidade disponível (opcional)
                 <input
+                  disabled={isCampaignDayClosed}
                   onChange={(event) => updateCampaignDayBuilderField("availableQuantity", event.target.value)}
                   placeholder="Ex: 25 porções"
                   type="text"
@@ -2217,6 +2223,7 @@ function App() {
               <label>
                 Horário limite (opcional)
                 <input
+                  disabled={isCampaignDayClosed}
                   onChange={(event) => updateCampaignDayBuilderField("deadline", event.target.value)}
                   placeholder="Ex: 20h30"
                   type="text"

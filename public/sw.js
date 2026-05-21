@@ -1,4 +1,4 @@
-﻿const CACHE_VERSION = "promocoes-sabor-latino-v1";
+const CACHE_VERSION = "promocoes-sabor-latino-v2-weekplanner";
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `runtime-${CACHE_VERSION}`;
 const STATIC_ASSETS = [
@@ -11,12 +11,15 @@ const STATIC_ASSETS = [
   "/icons/icon-512-maskable.png",
   "/icons/apple-touch-icon.png",
   "/icons/favicon-32.png",
-  "/icons/favicon-16.png"
+  "/icons/favicon-16.png",
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(APP_SHELL_CACHE).then((cache) => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
+    caches
+      .open(APP_SHELL_CACHE)
+      .then((cache) => cache.addAll(STATIC_ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -47,7 +50,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/api/")) {
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/.netlify/functions/")) {
     event.respondWith(fetch(request));
     return;
   }
@@ -63,6 +66,24 @@ self.addEventListener("fetch", (event) => {
         .catch(async () => {
           const cachedPage = await caches.match(request);
           return cachedPage || caches.match("/");
+        })
+    );
+    return;
+  }
+
+  if (request.destination === "script" || request.destination === "style") {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          const cachedResponse = await caches.match(request);
+          return cachedResponse || fetch(request);
         })
     );
     return;

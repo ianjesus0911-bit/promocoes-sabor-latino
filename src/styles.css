@@ -532,6 +532,13 @@ textarea {
   font-size: 0.84rem;
 }
 
+.mini-calendar-title {
+  margin-top: 0.7rem;
+  color: #8c4a20;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
 .week-mini-calendar {
   margin-top: 0.75rem;
   display: grid;
