@@ -1,70 +1,54 @@
-﻿# Promoções Sabor Latino
+# Promoções Sabor Latino
 
-Aplicação web em React para criar promoções rápidas e campanhas diárias do restaurante **Sabor Latino**, com foco em vendas por WhatsApp e redes sociais.
+Aplicação web em React para criar campanhas e promoções rápidas do restaurante **Sabor Latino** (Nova Bassano/RS), com foco em conversão por WhatsApp e redes sociais.
 
-## Seções da app
+## Seções principais da app
 
-1. Início
-2. Campanha Inteligente
-3. Criador de promoções
-4. Gerador de textos
-5. Campanha do Dia
-6. Instagram Oficial
-7. Inspirações & Imagens
-8. Histórico
-9. Favoritas
-10. Promoções rápidas prontas
-11. Configurações
+1. Início  
+2. Campanha Inteligente  
+3. Criador de promoções  
+4. Gerador de textos  
+5. Campanha do Dia  
+6. Instagram Oficial e Análise Manual  
+7. Inspirações & Imagens  
+8. Histórico  
+9. Favoritas  
+10. Promoções rápidas prontas  
+11. Configurações  
 
 ---
 
-## Instagram Oficial com Netlify Functions
+## Geração com IA (segura via Netlify Functions)
 
-A integração oficial foi preparada para funcionar na **Netlify** usando funções serverless em:
+A **Campanha Inteligente** usa backend serverless para proteger a chave da OpenAI.
 
-- `netlify/functions/instagram-auth-url.js`
-- `netlify/functions/instagram-callback.js`
-- `netlify/functions/instagram-profile.js`
-- `netlify/functions/instagram-insights.js`
-- `netlify/functions/_instagram-utils.js`
-
-### Endpoints gerados pela Netlify
-
-- `/.netlify/functions/instagram-auth-url`
-  - Gera a URL oficial de autorização da Meta.
-- `/.netlify/functions/instagram-callback`
-  - Recebe o `code` do OAuth e troca por token de acesso.
-- `/.netlify/functions/instagram-profile`
-  - Consulta dados básicos reais do perfil profissional conectado.
-- `/.netlify/functions/instagram-insights`
-  - Estrutura pronta para métricas reais do perfil e publicações.
+- Função: `netlify/functions/generate-campaign.js`
+- Endpoint no frontend: `POST /.netlify/functions/generate-campaign`
+- Modelo usado: `gpt-4o-mini`
+- Prompt de sistema fixo no backend (não exposto no React)
 
 ### Segurança aplicada
 
-- Sem scraping.
-- Sem automação não autorizada.
-- Sem segredo da Meta no frontend React.
-- `META_APP_SECRET` usado apenas no backend (Netlify Functions).
-- Token de acesso salvo em cookie `httpOnly` no callback.
+- A chave **não** fica no frontend React.
+- Não usar `VITE_OPENAI_API_KEY`.
+- A chave é lida apenas no backend com `process.env.OPENAI_API_KEY`.
+- Se a IA falhar ou a chave não existir, a app usa **fallback local** automaticamente para não quebrar o fluxo.
 
 ---
 
-## Configurar variáveis de ambiente na Netlify
+## Variáveis de ambiente na Netlify
 
-No painel da Netlify (`Site configuration` -> `Environment variables`), configurar:
+No painel da Netlify (`Site configuration` -> `Environment variables`), configure:
+
+- `OPENAI_API_KEY` (obrigatória para geração com IA real)
+
+Variáveis já existentes no projeto (fluxos de Instagram backend):
 
 - `META_APP_ID`
 - `META_APP_SECRET`
 - `META_REDIRECT_URI`
-
-Exemplo de `META_REDIRECT_URI`:
-
-`https://SEU-SITE.netlify.app/.netlify/functions/instagram-callback`
-
-Variáveis opcionais:
-
-- `PUBLIC_SITE_URL` (ex.: `https://SEU-SITE.netlify.app`)
-- `META_API_VERSION` (ex.: `v20.0`)
+- `PUBLIC_SITE_URL` (opcional)
+- `META_API_VERSION` (opcional)
 
 Arquivo de referência local:
 
@@ -72,69 +56,40 @@ Arquivo de referência local:
 
 ---
 
-## Requisitos para funcionar de verdade
+## Fluxo da Campanha Inteligente
 
-Para a conexão oficial real, é necessário:
-
-1. Conta do Instagram **profissional** (Business ou Creator).
-2. App criada no **Meta Developers**.
-3. Permissões aprovadas pela Meta (App Review), conforme uso.
-4. `Redirect URI` configurada corretamente no app da Meta.
-5. Instagram profissional vinculado a uma Página do Facebook.
+1. Usuário preenche produto, objetivo, público, momento, canal e tom.
+2. Frontend envia os dados para `/.netlify/functions/generate-campaign`.
+3. A function gera os textos com OpenAI no backend.
+4. O frontend exibe o conteúdo retornado.
+5. Se houver falha de IA, a app mostra mensagem amigável e ativa o gerador local automaticamente.
 
 ---
 
-## Fluxo de conexão oficial
+## Netlify Functions
 
-1. Usuário toca em **Conectar Instagram via Meta** no módulo Instagram Oficial.
-2. Front chama `/.netlify/functions/instagram-auth-url`.
-3. Função retorna URL oficial de OAuth da Meta.
-4. Usuário autentica e autoriza na Meta.
-5. Meta redireciona para `/.netlify/functions/instagram-callback`.
-6. Callback troca `code` por token e salva cookie seguro.
-7. Front atualiza estado para:
-   - Não conectado
-   - Conectando
-   - Conectado
-   - Erro na conexão
-8. Front consulta `/.netlify/functions/instagram-profile` para exibir dados do perfil.
+`netlify.toml` já está configurado para publicar funções em:
 
----
-
-## Comportamento no frontend
-
-No módulo **Instagram Oficial**, a app mostra:
-
-- Instagram oficial configurado (ex.: `@saborlatinobassano`)
-- Estado de conexão
-- Data da conexão
-- Dados do perfil quando disponíveis
-- Mensagem clara em caso de variáveis ausentes ou erro de autenticação
+- `[functions]`
+- `directory = "netlify/functions"`
+- `node_bundler = "esbuild"`
 
 ---
 
 ## PWA instalável (celular)
 
-A aplicação foi preparada como **PWA** e pode ser instalada no celular como app.
+A aplicação está preparada como PWA para uso no celular.
 
 ### Recursos incluídos
 
-- `public/manifest.json` (principal)
-- `public/manifest.webmanifest` (compatibilidade)
-- `public/sw.js` (Service Worker)
+- `public/manifest.json`
+- `public/manifest.webmanifest`
+- `public/sw.js`
 - ícones em `public/icons/`
 
 ### Como instalar no Android (Chrome)
 
 1. Publique em HTTPS (Netlify já fornece HTTPS).
 2. Abra a URL no Chrome do celular.
-3. Menu de três pontos.
-4. Toque em **Adicionar à tela inicial** ou **Instalar app**.
-
----
-
-## Observações importantes
-
-- Se a conexão oficial falhar, revise permissões e `META_REDIRECT_URI`.
-- Não coloque chaves da Meta no código do frontend.
-- Para produção, mantenha escopos e tokens sob governança de segurança.
+3. Toque no menu de três pontos.
+4. Selecione **Adicionar à tela inicial** ou **Instalar app**.

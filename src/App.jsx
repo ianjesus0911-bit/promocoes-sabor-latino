@@ -759,7 +759,7 @@ function App() {
         moment: payload.moment,
       });
 
-      const pack = generateIntelligentCampaignPack({
+      const localPack = generateIntelligentCampaignPack({
         product: payload.product,
         objective: payload.objective,
         audience: payload.audience,
@@ -770,23 +770,103 @@ function App() {
         instagramInsights: manualInsights,
       });
 
+      let finalPack = localPack;
+      let feedbackMessage = "Campanha inteligente gerada com sucesso!";
+
+      try {
+        const serverResponse = await fetch("/.netlify/functions/generate-campaign", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            form: payload,
+            settings: {
+              restaurantName: settings.restaurantName,
+              whatsappNumber: settings.whatsappNumber,
+              address: settings.address,
+              featuredDish: settings.featuredDish,
+              openingHours: settings.openingHours,
+            },
+            insights: manualInsights,
+            metrics: {
+              analyzedCount: instagramMetrics.analyzedCount,
+              topContentType: instagramMetrics.topContentType,
+              topDishByOrders: instagramMetrics.topDishByOrders,
+              bestObservedHourRange: instagramMetrics.bestObservedHourRange,
+              recommendationToday: instagramMetrics.recommendationToday,
+            },
+          }),
+        });
+
+        const aiPayload = await serverResponse.json().catch(() => ({}));
+        const requiredAiKeys = [
+          "whatsapp",
+          "instagram_feed",
+          "instagram_story",
+          "facebook",
+          "tiktok",
+          "frase_imagem",
+          "prompt_imagem",
+          "roteiro_video",
+          "hashtags",
+          "horario_sugerido",
+          "cta_whatsapp",
+        ];
+
+        if (!serverResponse.ok) {
+          const message =
+            typeof aiPayload?.error === "string"
+              ? aiPayload.error
+              : "Não foi possível gerar conteúdo com IA neste momento.";
+          throw new Error(message);
+        }
+
+        const validAiPayload = requiredAiKeys.every((key) => typeof aiPayload?.[key] === "string");
+        if (!validAiPayload) {
+          throw new Error("Resposta da IA veio fora do formato esperado.");
+        }
+
+        finalPack = {
+          ...localPack,
+          strategyRecommended: `${localPack.strategyRecommended}\nConteúdo textual otimizado por IA para ampliar conversão agora.`,
+          whatsappText: aiPayload.whatsapp,
+          instagramStoryText: aiPayload.instagram_story,
+          instagramFeedCaption: aiPayload.instagram_feed,
+          facebookText: aiPayload.facebook,
+          tiktokText: aiPayload.tiktok,
+          imageImpactPhrase: aiPayload.frase_imagem,
+          imagePrompt: aiPayload.prompt_imagem,
+          videoScript: aiPayload.roteiro_video,
+          hashtags: aiPayload.hashtags,
+          bestTimeSuggested: aiPayload.horario_sugerido || localPack.bestTimeSuggested,
+          finalWhatsAppCTA: aiPayload.cta_whatsapp,
+          recommendationSourceNotice: `${localPack.recommendationSourceNotice} Conteúdo gerado por IA via Netlify Functions.`,
+        };
+        feedbackMessage = "Campanha inteligente gerada com IA com sucesso!";
+      } catch (error) {
+        const details = error instanceof Error ? error.message : "Falha ao gerar com IA.";
+        console.warn("Falha na geração inteligente via IA:", details);
+        feedbackMessage = "IA indisponível no momento. Usamos o gerador local como respaldo para você continuar vendendo.";
+      }
+
       setIntelligentCampaignBuilder(payload);
-      setIntelligentCampaignGenerated(pack);
+      setIntelligentCampaignGenerated(finalPack);
       setHistoryItems((current) => [
         createHistoryRecord({
           promotionType: `Campanha Inteligente: ${payload.product}`,
           channel: payload.mainChannel,
           tone: payload.tone,
-          whatsappText: pack.whatsappText,
-          instagramText: pack.instagramFeedCaption,
-          facebookText: pack.facebookText,
-          hashtags: pack.hashtags,
-          videoScript: pack.videoScript,
-          imagePrompt: pack.imagePrompt,
+          whatsappText: finalPack.whatsappText,
+          instagramText: finalPack.instagramFeedCaption,
+          facebookText: finalPack.facebookText,
+          hashtags: finalPack.hashtags,
+          videoScript: finalPack.videoScript,
+          imagePrompt: finalPack.imagePrompt,
         }),
         ...current,
       ]);
-      setIntelligentCampaignFeedback("Campanha inteligente gerada com sucesso!");
+      setIntelligentCampaignFeedback(feedbackMessage);
       setTimeout(() => setIntelligentCampaignFeedback(""), 1800);
     } finally {
       setIntelligentCampaignLoading(false);
