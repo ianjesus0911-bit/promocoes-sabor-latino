@@ -765,6 +765,47 @@ function App() {
     return false;
   };
 
+  const clampStoryToEightWords = (value, fallback) => {
+    const source = String(value || fallback || "").replace(/\s+/g, " ").trim();
+    if (!source) return String(fallback || "").trim();
+    const words = source.split(" ").filter(Boolean);
+    if (words.length <= 8) return source;
+    return words.slice(0, 8).join(" ").replace(/[.,;:!?]+$/g, "");
+  };
+
+  const normalizeHashtagsToFive = (value, fallback) => {
+    const source = String(value || "").trim();
+    const fallbackSource = String(fallback || "").trim();
+    const extract = (text) => {
+      const tags = text.match(/#[A-Za-zÀ-ÿ0-9_]+/g) || [];
+      const unique = [];
+      const seen = new Set();
+      for (const tag of tags) {
+        const key = tag.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(tag);
+      }
+      return unique;
+    };
+
+    let tags = extract(source);
+    if (!tags.length) tags = extract(fallbackSource);
+    if (!tags.some((tag) => tag.toLowerCase() === "#saborlatino")) tags.unshift("#SaborLatino");
+    if (!tags.some((tag) => tag.toLowerCase() === "#novabassano")) tags.splice(1, 0, "#NovaBassano");
+
+    const uniqueFinal = [];
+    const seenFinal = new Set();
+    for (const tag of tags) {
+      const normalized = tag.startsWith("#") ? tag : `#${tag}`;
+      const key = normalized.toLowerCase();
+      if (seenFinal.has(key)) continue;
+      seenFinal.add(key);
+      uniqueFinal.push(normalized);
+    }
+    return uniqueFinal.slice(0, 5).join(" ");
+  };
+
   const generateIntelligentCampaignNow = async (payload = intelligentCampaignBuilder) => {
     setIntelligentCampaignLoading(true);
     try {
@@ -845,21 +886,31 @@ function App() {
 
         const aiWhatsAppText = String(aiPayload.whatsapp || "").trim();
         const finalWhatsAppText = isWeakWhatsAppText(aiWhatsAppText) ? localPack.whatsappText : aiWhatsAppText;
+        const finalInstagramStory = clampStoryToEightWords(aiPayload.instagram_story, localPack.instagramStoryText);
+        const finalHashtags = normalizeHashtagsToFive(aiPayload.hashtags, localPack.hashtags);
+        const safeInstagramFeed = String(aiPayload.instagram_feed || "").trim() || localPack.instagramFeedCaption;
+        const safeFacebook = String(aiPayload.facebook || "").trim() || localPack.facebookText;
+        const safeTikTok = String(aiPayload.tiktok || "").trim() || localPack.tiktokText;
+        const safeImpactPhrase = String(aiPayload.frase_imagem || "").trim() || localPack.imageImpactPhrase;
+        const safePromptImage = String(aiPayload.prompt_imagem || "").trim() || localPack.imagePrompt;
+        const safeVideoScript = String(aiPayload.roteiro_video || "").trim() || localPack.videoScript;
+        const safeBestHour = String(aiPayload.horario_sugerido || "").trim() || localPack.bestTimeSuggested;
+        const safeCta = String(aiPayload.cta_whatsapp || "").trim() || localPack.finalWhatsAppCTA;
 
         finalPack = {
           ...localPack,
           strategyRecommended: `${localPack.strategyRecommended}\nConteúdo textual otimizado por IA para ampliar conversão agora.`,
           whatsappText: finalWhatsAppText,
-          instagramStoryText: aiPayload.instagram_story,
-          instagramFeedCaption: aiPayload.instagram_feed,
-          facebookText: aiPayload.facebook,
-          tiktokText: aiPayload.tiktok,
-          imageImpactPhrase: aiPayload.frase_imagem,
-          imagePrompt: aiPayload.prompt_imagem,
-          videoScript: aiPayload.roteiro_video,
-          hashtags: aiPayload.hashtags,
-          bestTimeSuggested: aiPayload.horario_sugerido || localPack.bestTimeSuggested,
-          finalWhatsAppCTA: aiPayload.cta_whatsapp,
+          instagramStoryText: finalInstagramStory,
+          instagramFeedCaption: safeInstagramFeed,
+          facebookText: safeFacebook,
+          tiktokText: safeTikTok,
+          imageImpactPhrase: safeImpactPhrase,
+          imagePrompt: safePromptImage,
+          videoScript: safeVideoScript,
+          hashtags: finalHashtags,
+          bestTimeSuggested: safeBestHour,
+          finalWhatsAppCTA: safeCta,
           recommendationSourceNotice: `${localPack.recommendationSourceNotice} Conteúdo gerado por IA via Netlify Functions.`,
         };
         feedbackMessage =
