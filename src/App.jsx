@@ -1,12 +1,10 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import {
   channels,
-  fixedWhatsAppNumber,
   imageFormats,
   imageGoals,
   imageProducts,
   imageStyles,
-  initialSettings,
   inspirationContentTypes,
   inspirationNiches,
   inspirationPlatforms,
@@ -23,7 +21,7 @@ import {
   generateIntelligentCampaignPack,
 } from "./utils/intelligentCampaignGenerator";
 import { generatePromotionPack } from "./utils/promoGenerator";
-import { buildFixedWhatsAppLink, buildWhatsAppLink, FIXED_WHATSAPP_DISPLAY } from "./utils/whatsapp";
+import { buildWhatsAppLink } from "./utils/whatsapp";
 
 const sections = [
   { id: "inicio", label: "Início" },
@@ -614,9 +612,108 @@ const normalizeInstagramOfficialInput = (rawValue) => {
   return { value: `@${username.toLowerCase()}` };
 };
 
+const SETTINGS_STORAGE_KEY = "sabor_latino_config";
+const LEGACY_SETTINGS_STORAGE_KEY = "promocoes.settings";
+
+const defaultRestaurantSettings = {
+  restaurantName: "Sabor Latino",
+  whatsappNumber: "+55 54 8100-7256",
+  address: "Avenida 23 de Maio, nº 313, Centro, Nova Bassano",
+  featuredDish: "Ropa vieja cubana",
+  openingHours: "Terça a domingo, 11h às 23h",
+  instagramOfficial: "@saborlatinobassano",
+  openDays: "terça a domingo",
+  closedDays: "segunda-feira",
+};
+
+const normalizeRestaurantSettings = (input = {}) => {
+  const normalizedInstagram =
+    normalizeInstagramOfficialInput(input.instagramOfficial || input.instagram || defaultRestaurantSettings.instagramOfficial).value ||
+    "@saborlatinobassano";
+
+  return {
+    restaurantName: String(input.restaurantName || input.nome_restaurante || defaultRestaurantSettings.restaurantName).trim(),
+    whatsappNumber: String(input.whatsappNumber || input.whatsapp || defaultRestaurantSettings.whatsappNumber).trim(),
+    address: String(input.address || input.endereco || defaultRestaurantSettings.address).trim(),
+    featuredDish: String(input.featuredDish || input.prato_destaque || defaultRestaurantSettings.featuredDish).trim(),
+    openingHours: String(input.openingHours || input.horario_atendimento || defaultRestaurantSettings.openingHours).trim(),
+    instagramOfficial: normalizedInstagram,
+    openDays: String(input.openDays || input.dias_abertos || defaultRestaurantSettings.openDays).trim(),
+    closedDays: String(input.closedDays || input.dias_fechados || defaultRestaurantSettings.closedDays).trim(),
+  };
+};
+
+const toStoredRestaurantConfig = (settings) => {
+  const normalized = normalizeRestaurantSettings(settings);
+  return {
+    nome_restaurante: normalized.restaurantName,
+    whatsapp: normalized.whatsappNumber,
+    endereco: normalized.address,
+    instagram: normalized.instagramOfficial,
+    horario_atendimento: normalized.openingHours,
+    dias_abertos: normalized.openDays,
+    dias_fechados: normalized.closedDays,
+    prato_destaque: normalized.featuredDish,
+  };
+};
+
+const fromStoredRestaurantConfig = (stored) => {
+  if (!stored || typeof stored !== "object") return normalizeRestaurantSettings(defaultRestaurantSettings);
+  return normalizeRestaurantSettings({
+    nome_restaurante: stored.nome_restaurante,
+    whatsapp: stored.whatsapp,
+    endereco: stored.endereco,
+    instagram: stored.instagram,
+    horario_atendimento: stored.horario_atendimento,
+    dias_abertos: stored.dias_abertos,
+    dias_fechados: stored.dias_fechados,
+    prato_destaque: stored.prato_destaque,
+    restaurantName: stored.restaurantName,
+    whatsappNumber: stored.whatsappNumber,
+    address: stored.address,
+    instagramOfficial: stored.instagramOfficial,
+    openingHours: stored.openingHours,
+    openDays: stored.openDays,
+    closedDays: stored.closedDays,
+    featuredDish: stored.featuredDish,
+  });
+};
+
+const readRestaurantSettingsFromStorage = () => {
+  if (typeof window === "undefined") return normalizeRestaurantSettings(defaultRestaurantSettings);
+
+  try {
+    const rawCurrent = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (rawCurrent) {
+      return fromStoredRestaurantConfig(JSON.parse(rawCurrent));
+    }
+
+    const rawLegacy = window.localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
+    if (rawLegacy) {
+      const migrated = fromStoredRestaurantConfig(JSON.parse(rawLegacy));
+      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(toStoredRestaurantConfig(migrated)));
+      return migrated;
+    }
+  } catch (error) {
+    console.error("Erro ao carregar configurações do restaurante:", error);
+  }
+
+  return normalizeRestaurantSettings(defaultRestaurantSettings);
+};
+
+const persistRestaurantSettings = (settings) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(toStoredRestaurantConfig(settings)));
+  } catch (error) {
+    console.error("Erro ao salvar configurações do restaurante:", error);
+  }
+};
+
 function App() {
   const [activeSection, setActiveSection] = useState("inicio");
-  const [settings, setSettings] = usePersistentState("promocoes.settings", initialSettings);
+  const [settings, setSettings] = useState(() => readRestaurantSettingsFromStorage());
+  const [settingsDraft, setSettingsDraft] = useState(() => readRestaurantSettingsFromStorage());
   const [builder, setBuilder] = usePersistentState("promocoes.builder", defaultBuilder);
   const [generated, setGenerated] = usePersistentState("promocoes.generated", null);
   const [favoritePromotions, setFavoritePromotions] = usePersistentState("promocoes.favorites", []);
@@ -677,45 +774,13 @@ function App() {
   const [historyResultFeedback, setHistoryResultFeedback] = useState("");
   const [instagramFeedback, setInstagramFeedback] = useState("");
   const [instagramManualFeedback, setInstagramManualFeedback] = useState("");
-  const [instagramProfileInput, setInstagramProfileInput] = useState(
-    settings.instagramOfficial || "@saborlatinobassano"
-  );
-  const [instagramProfileError, setInstagramProfileError] = useState("");
+  const [settingsFeedback, setSettingsFeedback] = useState("");
+  const [settingsError, setSettingsError] = useState("");
 
   useEffect(() => {
-    if (settings.instagramOfficial === undefined) {
-      setSettings((current) => ({
-        ...current,
-        instagramOfficial: "@saborlatinobassano",
-      }));
-      return;
-    }
-
-    if (String(settings.instagramOfficial).toLowerCase() === "@saborlatino") {
-      setSettings((current) => ({
-        ...current,
-        instagramOfficial: "@saborlatinobassano",
-      }));
-      return;
-    }
-
-    const parsed = normalizeInstagramOfficialInput(settings.instagramOfficial || "");
-    if (parsed.value && parsed.value !== settings.instagramOfficial) {
-      setSettings((current) => ({
-        ...current,
-        instagramOfficial: parsed.value,
-      }));
-      return;
-    }
-
-    setInstagramProfileInput(settings.instagramOfficial || "");
-    if (parsed.error) {
-      setInstagramProfileError(parsed.error);
-      return;
-    }
-
-    setInstagramProfileError("");
-  }, [settings.instagramOfficial, setSettings]);
+    setSettingsDraft(settings);
+    setSettingsError("");
+  }, [settings]);
 
   const openingMessage = useMemo(() => {
     return `Olá! Quero ver as promoções de hoje do ${settings.restaurantName}.`;
@@ -1295,7 +1360,10 @@ function App() {
 
   const buildQuickFallbackPack = (action) => {
     const restaurantName = settings.restaurantName || "Sabor Latino";
-    const whatsapp = settings.whatsappNumber || FIXED_WHATSAPP_DISPLAY;
+    const whatsapp = settings.whatsappNumber || defaultRestaurantSettings.whatsappNumber;
+    const openDays = settings.openDays || defaultRestaurantSettings.openDays;
+    const closedDays = settings.closedDays || defaultRestaurantSettings.closedDays;
+    const scheduleLine = `Aberto: ${openDays}. Fechado: ${closedDays}.`;
     const baseData = {
       hashtags: "#SaborLatino #NovaBassano #PedidoNoWhatsApp #ComidaLatina #ComidaCubana",
       ctaWhatsapp: `Chama no WhatsApp ${whatsapp} e faz seu pedido agora.`,
@@ -1360,9 +1428,9 @@ Mesa pronta, comida cubana e latina bem servida em Nova Bassano. Chama no WhatsA
       return {
         ...baseData,
         whatsappText: `Domingo é dia de almoço em família no ${restaurantName}.
-Comida cubana e latina feita com carinho. Estamos abertos de terça a domingo. Reserve no WhatsApp ${whatsapp}.`,
+Comida cubana e latina feita com carinho. ${scheduleLine} Reserve no WhatsApp ${whatsapp}.`,
         instagramStoryText: "Domingo de almoço cubano em família.",
-        facebookText: `Domingo combina com mesa cheia no ${restaurantName}. Estamos em Nova Bassano, abertos de terça a domingo. Chama no WhatsApp ${whatsapp}.`,
+        facebookText: `Domingo combina com mesa cheia no ${restaurantName}. ${scheduleLine} Chama no WhatsApp ${whatsapp}.`,
         imagePhrase: "Domingo com comida cubana em família",
       };
     }
@@ -1494,6 +1562,9 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
             address: settings.address,
             featuredDish: settings.featuredDish,
             openingHours: settings.openingHours,
+            openDays: settings.openDays,
+            closedDays: settings.closedDays,
+            instagramOfficial: settings.instagramOfficial,
           },
           insights: {
             dayStatus: isCampaignDayClosed ? "Fechado" : "Aberto",
@@ -1811,6 +1882,9 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
               address: settings.address,
               featuredDish: settings.featuredDish,
               openingHours: settings.openingHours,
+              openDays: settings.openDays,
+              closedDays: settings.closedDays,
+              instagramOfficial: settings.instagramOfficial,
             },
             insights: manualInsights,
             metrics: {
@@ -1967,13 +2041,15 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
             address: settings.address,
             featuredDish: settings.featuredDish,
             openingHours: settings.openingHours,
+            openDays: settings.openDays,
+            closedDays: settings.closedDays,
+            instagramOfficial: settings.instagramOfficial,
           },
           insights: {
             quickActionId: action.id,
             quickActionLabel: action.label,
             recommendation: config.instruction,
-            weeklyContext:
-              "Sabor Latino abre de terça a domingo e fica fechado às segundas-feiras.",
+            weeklyContext: `Sabor Latino abre em ${settings.openDays} e fecha em ${settings.closedDays}.`,
           },
         }),
       });
@@ -2082,7 +2158,7 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
 
   const buildViralHooksFallback = ({ product, hookStyle, channel }) => {
     const restaurantName = settings.restaurantName || "Sabor Latino";
-    const whatsapp = settings.whatsappNumber || FIXED_WHATSAPP_DISPLAY;
+    const whatsapp = settings.whatsappNumber || defaultRestaurantSettings.whatsappNumber;
     const productLabel = String(product || "comida cubana");
 
     const styleStarters = {
@@ -2199,6 +2275,9 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
             address: settings.address,
             featuredDish: settings.featuredDish,
             openingHours: settings.openingHours,
+            openDays: settings.openDays,
+            closedDays: settings.closedDays,
+            instagramOfficial: settings.instagramOfficial,
           },
         }),
       });
@@ -2385,12 +2464,12 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
 
   const openWhatsAppWithGenerated = () => {
     if (!generated) return;
-    window.open(buildFixedWhatsAppLink(generated.whatsappText), "_blank", "noreferrer");
+    window.open(buildWhatsAppLink(settings.whatsappNumber, generated.whatsappText), "_blank", "noreferrer");
   };
 
   const openWhatsAppWithIntelligentCampaign = () => {
     if (!intelligentCampaignGenerated) return;
-    window.open(buildFixedWhatsAppLink(intelligentCampaignGenerated.whatsappText), "_blank", "noreferrer");
+    window.open(buildWhatsAppLink(settings.whatsappNumber, intelligentCampaignGenerated.whatsappText), "_blank", "noreferrer");
   };
 
   const openWhatsAppWithQuickGenerated = () => {
@@ -2700,7 +2779,7 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
   });
 
   const buildInspirationAdaptationFallback = (inspiration) => {
-    const whatsapp = settings.whatsappNumber || FIXED_WHATSAPP_DISPLAY;
+    const whatsapp = settings.whatsappNumber || defaultRestaurantSettings.whatsappNumber;
     const product = inferImageProductFromInspiration(inspiration);
     const platform = inspiration?.platform || "Instagram";
     const visualElement = inspiration?.visualElement || "close-up";
@@ -2767,6 +2846,9 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
             address: settings.address,
             featuredDish: settings.featuredDish,
             openingHours: settings.openingHours,
+            openDays: settings.openDays,
+            closedDays: settings.closedDays,
+            instagramOfficial: settings.instagramOfficial,
           },
         }),
       });
@@ -2882,35 +2964,41 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
     );
   };
 
-  const updateSettingsField = (field, value) => {
-    setSettings((current) => ({ ...current, [field]: value }));
+  const updateSettingsDraftField = (field, value) => {
+    setSettingsDraft((current) => ({ ...current, [field]: value }));
+    if (settingsFeedback) setSettingsFeedback("");
+    if (settingsError) setSettingsError("");
   };
 
-  const saveInstagramOfficialSetting = () => {
-    const parsed = normalizeInstagramOfficialInput(instagramProfileInput);
-    if (parsed.error) {
-      setInstagramProfileError(parsed.error);
-      return false;
+  const saveRestaurantSettings = () => {
+    const parsedInstagram = normalizeInstagramOfficialInput(settingsDraft.instagramOfficial || "");
+    if (parsedInstagram.error) {
+      setSettingsError(parsedInstagram.error);
+      setSettingsFeedback("");
+      return;
     }
 
-    setSettings((current) => ({
-      ...current,
-      instagramOfficial: parsed.value,
-    }));
-    setInstagramProfileInput(parsed.value);
-    setInstagramProfileError("");
-    return true;
+    const normalized = normalizeRestaurantSettings({
+      ...settingsDraft,
+      instagramOfficial: parsedInstagram.value,
+    });
+
+    persistRestaurantSettings(normalized);
+    setSettings(normalized);
+    setSettingsDraft(normalized);
+    setSettingsError("");
+    setSettingsFeedback("Configurações salvas com sucesso.");
+    setTimeout(() => setSettingsFeedback(""), 2200);
   };
 
-  const handleInstagramOfficialBlur = () => {
-    saveInstagramOfficialSetting();
-  };
-
-  const handleInstagramOfficialKeyDown = (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      saveInstagramOfficialSetting();
-    }
+  const restoreRestaurantDefaults = () => {
+    const restored = normalizeRestaurantSettings(defaultRestaurantSettings);
+    persistRestaurantSettings(restored);
+    setSettings(restored);
+    setSettingsDraft(restored);
+    setSettingsError("");
+    setSettingsFeedback("Configurações padrão restauradas.");
+    setTimeout(() => setSettingsFeedback(""), 2200);
   };
 
   const updateInstagramManualField = (field, value) => {
@@ -3097,12 +3185,17 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
               <button className="primary-btn" onClick={() => setActiveSection("criador")} type="button">
                 Criar promoção agora
               </button>
-              <a className="whatsapp-btn" href={buildFixedWhatsAppLink(openingMessage)} rel="noreferrer" target="_blank">
+              <a
+                className="whatsapp-btn"
+                href={buildWhatsAppLink(settings.whatsappNumber, openingMessage)}
+                rel="noreferrer"
+                target="_blank"
+              >
                 Abrir WhatsApp
               </a>
             </div>
 
-            <p className="hint">Botão do WhatsApp fixo em {FIXED_WHATSAPP_DISPLAY}.</p>
+            <p className="hint">Horário atual: {settings.openingHours}</p>
           </section>
         ) : null}
 
@@ -3110,6 +3203,9 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
           <section className="card">
             <h2>Campanha Inteligente</h2>
             <p className="muted">Campanha completa com estratégia, conteúdo e recomendação orientada por dados.</p>
+            <p className="hint">
+              Atendimento atual: {settings.openingHours} • Aberto: {settings.openDays} • Fechado: {settings.closedDays}
+            </p>
             {historyResultsSummary.hasData ? (
               <p className="hint">
                 Usando resultados manuais do Histórico: melhor canal {historyResultsSummary.topChannelByOrders}, melhor
@@ -3579,6 +3675,9 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
           <section className="card">
             <h2>Campanha do Dia</h2>
             <p className="muted">Crie uma campanha diária completa para vender mais com um único fluxo.</p>
+            <p className="hint">
+              Atendimento atual: {settings.openingHours} • Aberto: {settings.openDays} • Fechado: {settings.closedDays}
+            </p>
 
             <div className="subcard">
               <h3>Planejador semanal inteligente</h3>
@@ -4866,55 +4965,49 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
           <section className="card">
             <h2>Configuração simples</h2>
             <p className="muted">Dados do restaurante para personalizar suas promoções.</p>
+            <p className="hint">
+              As configurações são salvas neste dispositivo. Para usar em outro dispositivo, salve novamente.
+            </p>
 
             <div className="form-grid">
               <label>
                 Nome do restaurante
                 <input
-                  onChange={(event) => updateSettingsField("restaurantName", event.target.value)}
+                  onChange={(event) => updateSettingsDraftField("restaurantName", event.target.value)}
                   type="text"
-                  value={settings.restaurantName}
+                  value={settingsDraft.restaurantName}
                 />
               </label>
 
               <label>
                 WhatsApp
                 <input
-                  onChange={(event) => updateSettingsField("whatsappNumber", event.target.value)}
+                  onChange={(event) => updateSettingsDraftField("whatsappNumber", event.target.value)}
                   type="text"
-                  value={settings.whatsappNumber}
+                  value={settingsDraft.whatsappNumber}
                 />
               </label>
 
               <label className="full-width">
                 Endereço
                 <input
-                  onChange={(event) => updateSettingsField("address", event.target.value)}
+                  onChange={(event) => updateSettingsDraftField("address", event.target.value)}
                   type="text"
-                  value={settings.address}
+                  value={settingsDraft.address}
                 />
               </label>
 
               <label className="full-width">
                 Instagram oficial do restaurante
                 <input
-                  onBlur={handleInstagramOfficialBlur}
-                  onChange={(event) => {
-                    setInstagramProfileInput(event.target.value);
-                    if (instagramProfileError) setInstagramProfileError("");
-                  }}
-                  onKeyDown={handleInstagramOfficialKeyDown}
+                  onChange={(event) => updateSettingsDraftField("instagramOfficial", event.target.value)}
                   placeholder="@saborlatinobassano"
                   type="text"
-                  value={instagramProfileInput}
+                  value={settingsDraft.instagramOfficial}
                 />
               </label>
 
               <div className="full-width">
-                <button className="secondary-btn" onClick={saveInstagramOfficialSetting} type="button">
-                  Salvar Instagram oficial
-                </button>
-                {instagramProfileError ? <p className="input-error">{instagramProfileError}</p> : null}
                 <p className="hint">
                   Formatos aceitos: @usuario, usuario, https://instagram.com/usuario ou
                   https://www.instagram.com/usuario/
@@ -4924,20 +5017,46 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
               <label>
                 Prato destacado
                 <input
-                  onChange={(event) => updateSettingsField("featuredDish", event.target.value)}
+                  onChange={(event) => updateSettingsDraftField("featuredDish", event.target.value)}
                   type="text"
-                  value={settings.featuredDish}
+                  value={settingsDraft.featuredDish}
                 />
               </label>
 
               <label>
                 Horário de atendimento
                 <input
-                  onChange={(event) => updateSettingsField("openingHours", event.target.value)}
+                  onChange={(event) => updateSettingsDraftField("openingHours", event.target.value)}
                   type="text"
-                  value={settings.openingHours}
+                  value={settingsDraft.openingHours}
                 />
               </label>
+
+              <label>
+                Dias abertos
+                <input onChange={(event) => updateSettingsDraftField("openDays", event.target.value)} type="text" value={settingsDraft.openDays} />
+              </label>
+
+              <label>
+                Dias fechados
+                <input
+                  onChange={(event) => updateSettingsDraftField("closedDays", event.target.value)}
+                  type="text"
+                  value={settingsDraft.closedDays}
+                />
+              </label>
+
+              <div className="full-width grid-two">
+                <button className="primary-btn" onClick={saveRestaurantSettings} type="button">
+                  Salvar configurações
+                </button>
+                <button className="secondary-btn" onClick={restoreRestaurantDefaults} type="button">
+                  Restaurar padrão
+                </button>
+              </div>
+
+              {settingsError ? <p className="input-error full-width">{settingsError}</p> : null}
+              {settingsFeedback ? <p className="hint full-width">{settingsFeedback}</p> : null}
             </div>
           </section>
         ) : null}
@@ -4945,7 +5064,8 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
 
       <footer className="footer-note">
         <small>
-          {settings.restaurantName} • Nova Bassano, Rio Grande do Sul • WhatsApp fixo: {fixedWhatsAppNumber}
+          {settings.restaurantName} • {settings.address} • WhatsApp: {settings.whatsappNumber} • {settings.openDays} •{" "}
+          Fechado: {settings.closedDays} • Horário: {settings.openingHours}
         </small>
       </footer>
     </div>
