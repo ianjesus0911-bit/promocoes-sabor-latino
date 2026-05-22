@@ -86,6 +86,17 @@ const normalizeTag = (value) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9]/g, "");
 
+const cleanHook = (value) => String(value || "").replace(/\s+/g, " ").trim();
+
+const ensureStartsWithHook = (content, hook) => {
+  const text = String(content || "").trim();
+  const selectedHook = cleanHook(hook);
+  if (!selectedHook) return text;
+  if (!text) return selectedHook;
+  if (text.toLowerCase().startsWith(selectedHook.toLowerCase())) return text;
+  return `${selectedHook}\n${text}`;
+};
+
 const buildHashtags = ({ product, objective, audience }) => {
   return `#SaborLatino #ComidaLatina #NovaBassano #${normalizeTag(product)} #${normalizeTag(
     objective
@@ -122,6 +133,7 @@ export const generateIntelligentCampaignPack = ({
   tone,
   settings,
   instagramInsights,
+  selectedHook,
 }) => {
   const restaurantName = settings.restaurantName || "Sabor Latino";
   const whatsapp = settings.whatsappNumber || "+55 54 8100-7256";
@@ -142,6 +154,7 @@ export const generateIntelligentCampaignPack = ({
 
   const bestProductLabel = productLabels[insights.topProduct] || insights.topProduct;
   const hashtags = buildHashtags({ product, objective, audience });
+  const activeHook = cleanHook(selectedHook);
   const finalWhatsAppCTA = `👉 Peça agora no WhatsApp ${whatsapp} com a frase: "Quero ${productLabel} da campanha inteligente!"`;
   const sourceNotice =
     insights.source === "manual"
@@ -169,13 +182,14 @@ Ideal para ${audienceLabel}.
 Hoje no período da ${moment}, vamos acelerar pedidos.
 ${finalWhatsAppCTA}`;
 
-  const instagramStoryText = `${toneData.emoji} ${productLabel.toUpperCase()} HOJE
+  const storyCore = `${toneData.emoji} ${productLabel.toUpperCase()} HOJE
 ${objectiveLabel}
 Para ${audienceLabel}
 Poste entre ${insights.bestHour}
 Chame no WhatsApp: ${whatsapp}`;
+  const instagramStoryText = activeHook ? ensureStartsWithHook(storyCore, activeHook) : storyCore;
 
-  const instagramFeedCaption = `${toneData.emoji} Campanha Inteligente | ${restaurantName}
+  const instagramFeedCore = `${toneData.emoji} Campanha Inteligente | ${restaurantName}
 Destaque: ${productLabel}
 Objetivo: ${objective}
 Público: ${audience}
@@ -184,6 +198,7 @@ Formato forte: ${insights.bestFormat}
 ${toneData.style}
 ${finalWhatsAppCTA}
 ${hashtags}`;
+  const instagramFeedCaption = activeHook ? ensureStartsWithHook(instagramFeedCore, activeHook) : instagramFeedCore;
 
   const facebookText = `${restaurantName} apresenta a Campanha Inteligente do dia.
 Produto foco: ${productLabel}.
@@ -193,12 +208,13 @@ Público priorizado: ${audienceLabel}.
 🕒 Melhor horário para post: ${insights.bestHour}
 📲 WhatsApp: ${whatsapp}`;
 
-  const tiktokText = `${toneData.emoji} ${productLabel} no ponto certo!
+  const tiktokCore = `${toneData.emoji} ${productLabel} no ponto certo!
 Vídeo rápido para ${audienceLabel}.
 Gancho em 2 segundos + close com vapor.
 CTA final: chama no WhatsApp ${whatsapp}.`;
+  const tiktokText = activeHook ? ensureStartsWithHook(tiktokCore, activeHook) : tiktokCore;
 
-  const imageImpactPhrase = `${productLabel.toUpperCase()} AGORA • SABOR LATINO`;
+  const imageImpactPhrase = activeHook ? activeHook.split(" ").slice(0, 7).join(" ") : `${productLabel.toUpperCase()} AGORA • SABOR LATINO`;
 
   const imagePrompt = `Crie imagem promocional original para ${restaurantName}, comida latina/cubana, foco em ${productLabel}.
 Objetivo: ${objectiveLabel}.
@@ -210,11 +226,12 @@ Estilo visual recomendado: ${insights.bestVisualStyle}.
 Incluir cores quentes, aparência suculenta, vapor visível e CTA para WhatsApp ${whatsapp}.
 Não copiar conteúdos de terceiros.`;
 
-  const videoScript = `Roteiro de 8 segundos:
+  const videoCore = `Roteiro de 8 segundos:
 0-2s: close extremo de ${productLabel} com vapor.
 2-5s: mostrar textura + reação de desejo.
 5-8s: texto "${imageImpactPhrase}" + CTA "${finalWhatsAppCTA}".
 Publicar em: ${insights.bestHour}.`;
+  const videoScript = activeHook ? ensureStartsWithHook(videoCore, activeHook) : videoCore;
 
   return {
     strategyRecommended,

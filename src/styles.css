@@ -288,6 +288,26 @@ textarea {
   white-space: pre-wrap;
 }
 
+.hook-lines-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.hook-line-row {
+  border: 1px solid #f2dbc4;
+  border-radius: 10px;
+  background: #fffaf3;
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.hook-line-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
 .empty-state {
   margin-top: 0.8rem;
   color: var(--muted);
@@ -677,7 +697,8 @@ textarea {
   .campaign-recommendation-grid,
   .smart-actions-grid,
   .favorites-actions,
-  .history-actions {
+  .history-actions,
+  .hook-line-actions {
     grid-template-columns: 1fr;
   }
 

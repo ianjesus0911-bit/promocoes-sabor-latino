@@ -434,9 +434,15 @@ const extractJsonObjectFromText = (text) => {
 };
 
 const buildCampaignPrompt = (payload) => {
+  const selectedHook = cleanText(payload?.form?.selectedHook || "");
+  const selectedHookInstruction = selectedHook
+    ? `Existe um gancho selecionado obrigatório: "${selectedHook}". Use este gancho como frase inicial em tiktok, instagram_story, instagram_feed, roteiro_video e frase_imagem.`
+    : "Sem gancho obrigatório selecionado.";
+
   return [
     "Use somente os dados abaixo para gerar a campanha.",
     "Se algum dado estiver ausente, escreva de forma natural sem inventar promoções ou descontos.",
+    selectedHookInstruction,
     JSON.stringify(payload, null, 2),
   ].join("\n");
 };

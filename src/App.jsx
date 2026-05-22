@@ -28,6 +28,7 @@ import { buildFixedWhatsAppLink, buildWhatsAppLink, FIXED_WHATSAPP_DISPLAY } fro
 const sections = [
   { id: "inicio", label: "Início" },
   { id: "campanha_inteligente", label: "Campanha Inteligente" },
+  { id: "ganchos_virais", label: "Ganchos Virais" },
   { id: "criador", label: "Criador" },
   { id: "gerador", label: "Gerador" },
   { id: "campanha_dia", label: "Campanha do Dia" },
@@ -198,6 +199,38 @@ const quickOutputFields = [
   { key: "hashtags", title: "Hashtags" },
   { key: "ctaWhatsapp", title: "CTA para WhatsApp" },
 ];
+
+const viralHookProducts = [
+  "Almoço",
+  "Pizza cubana",
+  "Ropa vieja cubana",
+  "Combo familiar",
+  "Sobremesa",
+  "Bebida",
+  "Restaurante cheio",
+  "Comida cubana",
+];
+
+const viralHookStyles = [
+  "Curiosidade",
+  "Fome",
+  "Urgência",
+  "Local Nova Bassano",
+  "Prova social",
+  "Humor leve",
+  "Mistério",
+  "Família",
+  "Antes e depois",
+  "Polêmico leve",
+];
+
+const viralHookChannels = ["TikTok", "Instagram Reels", "Instagram Story", "WhatsApp Status"];
+
+const defaultViralHooksBuilder = {
+  product: "Ropa vieja cubana",
+  hookStyle: "Curiosidade",
+  channel: "TikTok",
+};
 
 const quickActionConfigs = {
   qa1: {
@@ -593,6 +626,13 @@ function App() {
   const [imageBuilder, setImageBuilder] = usePersistentState("promocoes.imageBuilder", defaultImageBuilder);
   const [imageGenerated, setImageGenerated] = usePersistentState("promocoes.imageGenerated", null);
   const [inspirations, setInspirations] = usePersistentState("promocoes.inspiracoes", []);
+  const [viralHooksBuilder, setViralHooksBuilder] = usePersistentState(
+    "promocoes.ganchosVirais.builder",
+    defaultViralHooksBuilder
+  );
+  const [viralHooksGenerated, setViralHooksGenerated] = usePersistentState("promocoes.ganchosVirais.generated", null);
+  const [viralHookFavorites, setViralHookFavorites] = usePersistentState("promocoes.ganchosVirais.favoritos", []);
+  const [selectedHookForCampaign, setSelectedHookForCampaign] = usePersistentState("gancho_selecionado", "");
   const [intelligentCampaignBuilder, setIntelligentCampaignBuilder] = usePersistentState(
     "promocoes.campanhaInteligente.builder",
     defaultIntelligentCampaignBuilder
@@ -627,6 +667,9 @@ function App() {
   const [quickGenerated, setQuickGenerated] = useState(null);
   const [quickLoading, setQuickLoading] = useState(false);
   const [quickFeedback, setQuickFeedback] = useState("");
+  const [viralHooksLoading, setViralHooksLoading] = useState(false);
+  const [viralHooksFeedback, setViralHooksFeedback] = useState("");
+  const [selectedGeneratedHook, setSelectedGeneratedHook] = useState("");
   const [inspirationAdaptation, setInspirationAdaptation] = useState(null);
   const [inspirationAdaptationLoading, setInspirationAdaptationLoading] = useState(false);
   const [inspirationAdaptationFeedback, setInspirationAdaptationFeedback] = useState("");
@@ -716,6 +759,21 @@ function App() {
   useEffect(() => {
     setCampaignDayViewedRecord(latestCampaignByWeekDay[campaignDaySelectedWeekDay] || null);
   }, [campaignDaySelectedWeekDay, latestCampaignByWeekDay]);
+
+  useEffect(() => {
+    if (!viralHooksGenerated?.hooks?.length) return;
+
+    const hookAlreadySelected = viralHooksGenerated.hooks.some((item) => item === selectedGeneratedHook);
+    if (hookAlreadySelected) return;
+
+    const savedHookStillExists = viralHooksGenerated.hooks.find((item) => item === selectedHookForCampaign);
+    if (savedHookStillExists) {
+      setSelectedGeneratedHook(savedHookStillExists);
+      return;
+    }
+
+    setSelectedGeneratedHook(viralHooksGenerated.hooks[0]);
+  }, [viralHooksGenerated, selectedGeneratedHook, selectedHookForCampaign]);
 
   const parseInstagramPostDate = (value) => {
     const parsed = new Date(String(value || "").replace(" ", "T"));
@@ -1661,6 +1719,35 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
     return uniqueFinal.slice(0, 5).join(" ");
   };
 
+  const cleanSelectedHook = (value) => String(value || "").replace(/\s+/g, " ").trim();
+
+  const ensureHookAtStart = (content, hook) => {
+    const cleanHook = cleanSelectedHook(hook);
+    const cleanContent = String(content || "").trim();
+    if (!cleanHook) return cleanContent;
+    if (!cleanContent) return cleanHook;
+    if (cleanContent.toLowerCase().startsWith(cleanHook.toLowerCase())) return cleanContent;
+    return `${cleanHook}\n${cleanContent}`;
+  };
+
+  const applySelectedHookToCampaignPack = (pack, hook) => {
+    const cleanHook = cleanSelectedHook(hook);
+    if (!cleanHook) return pack;
+
+    const impactWords = cleanHook.split(" ").filter(Boolean).slice(0, 7).join(" ");
+    return {
+      ...pack,
+      instagramStoryText: clampStoryToEightWords(
+        ensureHookAtStart(pack.instagramStoryText, cleanHook),
+        pack.instagramStoryText
+      ),
+      instagramFeedCaption: ensureHookAtStart(pack.instagramFeedCaption, cleanHook),
+      tiktokText: ensureHookAtStart(pack.tiktokText, cleanHook),
+      videoScript: ensureHookAtStart(pack.videoScript, cleanHook),
+      imageImpactPhrase: impactWords || pack.imageImpactPhrase,
+    };
+  };
+
   const generateIntelligentCampaignNow = async (payload = intelligentCampaignBuilder) => {
     setIntelligentCampaignLoading(true);
     try {
@@ -1694,6 +1781,7 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
         tone: payload.tone,
         settings,
         instagramInsights: manualInsights,
+        selectedHook: selectedHookForCampaign,
       });
 
       if (historyResultsSummary.hasData) {
@@ -1714,7 +1802,10 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            form: payload,
+            form: {
+              ...payload,
+              selectedHook: selectedHookForCampaign,
+            },
             settings: {
               restaurantName: settings.restaurantName,
               whatsappNumber: settings.whatsappNumber,
@@ -1735,6 +1826,7 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
               historyBestHour: historyResultsSummary.bestHourObserved,
               historyTopTextType: historyResultsSummary.topTextType,
               historyRecommendation: historyResultsSummary.recommendationNext,
+              selectedHook: selectedHookForCampaign,
             },
           }),
         });
@@ -1805,6 +1897,8 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
         console.warn("Falha na geração inteligente via IA:", details);
         feedbackMessage = "IA indisponível no momento. Usamos o gerador local como respaldo para você continuar vendendo.";
       }
+
+      finalPack = applySelectedHookToCampaignPack(finalPack, selectedHookForCampaign);
 
       setIntelligentCampaignBuilder(payload);
       setIntelligentCampaignGenerated(finalPack);
@@ -1968,6 +2062,219 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
     );
   };
 
+  const updateViralHooksBuilderField = (field, value) => {
+    setViralHooksBuilder((current) => ({ ...current, [field]: value }));
+  };
+
+  const normalizeHookLines = (values) => {
+    if (!Array.isArray(values)) return [];
+    const cleaned = [];
+    const seen = new Set();
+    for (const item of values) {
+      const text = String(item || "").replace(/\s+/g, " ").trim();
+      if (!text) continue;
+      const key = text.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cleaned.push(text);
+    }
+    return cleaned;
+  };
+
+  const buildViralHooksFallback = ({ product, hookStyle, channel }) => {
+    const restaurantName = settings.restaurantName || "Sabor Latino";
+    const whatsapp = settings.whatsappNumber || FIXED_WHATSAPP_DISPLAY;
+    const productLabel = String(product || "comida cubana");
+
+    const styleStarters = {
+      Curiosidade: "Você já viu isso em Nova Bassano?",
+      Fome: "Olha esse prato saindo quente agora.",
+      Urgência: "Últimas unidades saindo neste momento.",
+      "Local Nova Bassano": "Se você mora em Nova Bassano, olha isso.",
+      "Prova social": "Todo mundo está comentando esse prato hoje.",
+      "Humor leve": "Quem disse que hoje era dia de dieta?",
+      Mistério: "Tem um prato no Sabor Latino que surpreende.",
+      Família: "Hoje é dia de mesa cheia em família.",
+      "Antes e depois": "Olha o antes e depois desse prato.",
+      "Polêmico leve": "Tem gente dizendo que esse é o melhor prato da cidade.",
+    };
+
+    const starter = styleStarters[hookStyle] || styleStarters.Curiosidade;
+    const hooks = normalizeHookLines([
+      starter,
+      `Isso existe em Nova Bassano e você não sabia: ${productLabel}.`,
+      `O prato que tá chamando atenção no ${restaurantName}.`,
+      `Olha esse ${productLabel} saindo quentinho agora.`,
+      `Se você mora em Nova Bassano, precisa ver isso.`,
+    ]).slice(0, 5);
+
+    const overlayTexts = normalizeHookLines([
+      `${productLabel} saindo agora`,
+      "Hoje tem sabor de casa",
+      "Nova Bassano tá pedindo isso",
+      "Prato quente e bem servido",
+      "Peça no WhatsApp agora",
+    ]).slice(0, 5);
+
+    const whatsappCalls = normalizeHookLines([
+      `Chama no WhatsApp ${whatsapp} e peça agora.`,
+      `Me chama no WhatsApp ${whatsapp} e já separo o seu.`,
+      `Pedido rápido no WhatsApp ${whatsapp}.`,
+      `Reserve no WhatsApp ${whatsapp} antes que acabe.`,
+      `Quer hoje? Fala no WhatsApp ${whatsapp}.`,
+    ]).slice(0, 5);
+
+    const visualOpenings = normalizeHookLines([
+      `Close extremo do ${productLabel} com vapor nos primeiros 2 segundos.`,
+      "Câmera entrando na cozinha e prato chegando à mesa em corte rápido.",
+      `Primeiro frame com textura da comida e chamada curta para ${channel}.`,
+    ]).slice(0, 3);
+
+    const videoScript = `Cena 1 (0-2s): ${hooks[0]}
+Cena 2 (2-5s): mostrar ${productLabel} em close com comida quente.
+Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
+
+    return {
+      hooks,
+      overlayTexts,
+      whatsappCalls,
+      visualOpenings,
+      videoScript,
+    };
+  };
+
+  const normalizeViralHooksPayload = (payload, fallback) => {
+    const fillUntil = (primaryList, backupList, size) => {
+      const result = [...primaryList];
+      for (const item of backupList) {
+        if (result.length >= size) break;
+        if (result.some((entry) => entry.toLowerCase() === item.toLowerCase())) continue;
+        result.push(item);
+      }
+      return result.slice(0, size);
+    };
+
+    const hooks = fillUntil(normalizeHookLines(payload?.hooks), fallback.hooks, 10);
+    const overlayTexts = fillUntil(normalizeHookLines(payload?.overlay_texts), fallback.overlayTexts, 5);
+    const whatsappCalls = fillUntil(normalizeHookLines(payload?.whatsapp_ctas), fallback.whatsappCalls, 5);
+    const visualOpenings = fillUntil(normalizeHookLines(payload?.visual_openings), fallback.visualOpenings, 3);
+    const videoScript = String(payload?.video_script || "").trim();
+
+    return {
+      hooks: hooks.length ? hooks : fallback.hooks,
+      overlayTexts: overlayTexts.length ? overlayTexts : fallback.overlayTexts,
+      whatsappCalls: whatsappCalls.length ? whatsappCalls : fallback.whatsappCalls,
+      visualOpenings: visualOpenings.length ? visualOpenings : fallback.visualOpenings,
+      videoScript: videoScript || fallback.videoScript,
+    };
+  };
+
+  const generateViralHooksNow = async (payload = viralHooksBuilder) => {
+    setViralHooksLoading(true);
+    setViralHooksFeedback("Gerando ganchos...");
+    setViralHooksGenerated(null);
+
+    const fallbackPack = buildViralHooksFallback(payload);
+    let finalPack = {
+      ...fallbackPack,
+      usedFallback: true,
+    };
+    let usedFallback = false;
+    let timeoutId;
+
+    try {
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 12000);
+
+      const response = await fetch("/.netlify/functions/generate-hooks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          form: payload,
+          settings: {
+            restaurantName: settings.restaurantName,
+            whatsappNumber: settings.whatsappNumber,
+            address: settings.address,
+            featuredDish: settings.featuredDish,
+            openingHours: settings.openingHours,
+          },
+        }),
+      });
+
+      const apiPayload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof apiPayload?.error === "string" ? apiPayload.error : "Falha ao gerar ganchos.");
+      }
+
+      const normalized = normalizeViralHooksPayload(apiPayload, fallbackPack);
+      finalPack = {
+        ...normalized,
+        usedFallback: false,
+      };
+    } catch (error) {
+      usedFallback = true;
+      finalPack = {
+        ...fallbackPack,
+        usedFallback: true,
+      };
+      console.warn("Falha ao gerar ganchos com IA:", error);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      setViralHooksLoading(false);
+    }
+
+    setViralHooksGenerated({
+      ...finalPack,
+      product: payload.product,
+      hookStyle: payload.hookStyle,
+      channel: payload.channel,
+      createdAt: new Date().toLocaleString("pt-BR"),
+    });
+    setSelectedGeneratedHook(finalPack.hooks[0] || "");
+    setViralHooksFeedback(
+      usedFallback
+        ? "Não foi possível usar IA agora. Geramos alguns ganchos rápidos para você."
+        : "Ganchos gerados com sucesso!"
+    );
+  };
+
+  const useHookInIntelligentCampaign = (hook) => {
+    const cleaned = String(hook || "").replace(/\s+/g, " ").trim();
+    if (!cleaned) return;
+    setSelectedHookForCampaign(cleaned);
+    setViralHooksFeedback("Gancho salvo para usar na Campanha Inteligente.");
+    setTimeout(() => setViralHooksFeedback(""), 1800);
+  };
+
+  const saveViralHookFavorite = (hook) => {
+    const cleaned = String(hook || "").replace(/\s+/g, " ").trim();
+    if (!cleaned) return;
+
+    setViralHookFavorites((current) => {
+      if (current.some((item) => String(item.text || "").toLowerCase() === cleaned.toLowerCase())) {
+        return current;
+      }
+      return [
+        {
+          id: `hook-fav-${Date.now()}`,
+          text: cleaned,
+          product: viralHooksBuilder.product,
+          hookStyle: viralHooksBuilder.hookStyle,
+          channel: viralHooksBuilder.channel,
+          createdAt: new Date().toLocaleString("pt-BR"),
+        },
+        ...current,
+      ];
+    });
+  };
+
+  const deleteViralHookFavorite = (favoriteId) => {
+    setViralHookFavorites((current) => current.filter((item) => item.id !== favoriteId));
+  };
+
   const copyText = async (key, value) => {
     try {
       if (navigator.clipboard?.writeText) {
@@ -2023,6 +2330,11 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
       .join("\n\n------------------------------\n\n");
   };
 
+  const buildAllViralHooksText = (content) => {
+    const hooks = (content?.hooks || []).map((item, index) => `${index + 1}. ${item}`).join("\n");
+    return `10 ganchos curtos (ou fallback rápido)\n${hooks}`;
+  };
+
   const copyAllTexts = () => {
     if (!generated) return;
     copyText("all_texts", buildAllTexts(generated));
@@ -2065,6 +2377,11 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
   const copyAllIntelligentCampaignTexts = () => {
     if (!intelligentCampaignGenerated) return;
     copyText("all_intelligent_campaign", buildAllIntelligentCampaignTexts(intelligentCampaignGenerated));
+  };
+
+  const copyAllViralHooks = () => {
+    if (!viralHooksGenerated) return;
+    copyText("all_viral_hooks", buildAllViralHooksText(viralHooksGenerated));
   };
 
   const openWhatsAppWithGenerated = () => {
@@ -2800,6 +3117,20 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
                 horário {historyResultsSummary.bestHourObserved} e produto destaque {historyResultsSummary.topProductBySales}.
               </p>
             ) : null}
+            {selectedHookForCampaign ? (
+              <div className="subcard">
+                <h3>Gancho ativo para vídeos</h3>
+                <p>{selectedHookForCampaign}</p>
+                <div className="grid-two">
+                  <button className="secondary-btn" onClick={() => setActiveSection("ganchos_virais")} type="button">
+                    Ver Ganchos Virais
+                  </button>
+                  <button className="secondary-btn" onClick={() => setSelectedHookForCampaign("")} type="button">
+                    Remover gancho ativo
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="form-grid">
               <label>
@@ -2972,6 +3303,188 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
             ) : (
               <p className="empty-state">Defina os dados acima e toque em "Gerar campanha inteligente".</p>
             )}
+          </section>
+        ) : null}
+
+        {activeSection === "ganchos_virais" ? (
+          <section className="card">
+            <h2>Ganchos Virais</h2>
+            <p className="muted">
+              Frases curtas para os primeiros 2 segundos de vídeos, com foco em parar o dedo e gerar pedidos.
+            </p>
+
+            <div className="form-grid">
+              <label>
+                Produto
+                <select
+                  onChange={(event) => updateViralHooksBuilderField("product", event.target.value)}
+                  value={viralHooksBuilder.product}
+                >
+                  {viralHookProducts.map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Estilo do gancho
+                <select
+                  onChange={(event) => updateViralHooksBuilderField("hookStyle", event.target.value)}
+                  value={viralHooksBuilder.hookStyle}
+                >
+                  {viralHookStyles.map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="full-width">
+                Canal
+                <select
+                  onChange={(event) => updateViralHooksBuilderField("channel", event.target.value)}
+                  value={viralHooksBuilder.channel}
+                >
+                  {viralHookChannels.map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <button className="primary-btn full-width" disabled={viralHooksLoading} onClick={() => generateViralHooksNow()} type="button">
+              {viralHooksLoading ? "Gerando ganchos..." : "Gerar ganchos virais"}
+            </button>
+            {viralHooksFeedback ? <p className="hint">{viralHooksFeedback}</p> : null}
+
+            {viralHooksGenerated ? (
+              <>
+                <div className="grid-two">
+                  <button className="secondary-btn" onClick={copyAllViralHooks} type="button">
+                    {copiedKey === "all_viral_hooks" ? "Tudo copiado!" : "Copiar todos os ganchos"}
+                  </button>
+                  <button
+                    className="primary-btn"
+                    onClick={() => useHookInIntelligentCampaign(selectedGeneratedHook || viralHooksGenerated.hooks?.[0] || "")}
+                    type="button"
+                  >
+                    Usar na Campanha Inteligente
+                  </button>
+                </div>
+
+                <p className="hint">
+                  Gancho escolhido: <strong>{selectedGeneratedHook || viralHooksGenerated.hooks?.[0] || "nenhum"}</strong>
+                </p>
+
+                <div className="outputs-grid">
+                  <article className="output-card">
+                    <h3>10 ganchos curtos para os primeiros 2 segundos</h3>
+                    <div className="hook-lines-list">
+                      {(viralHooksGenerated.hooks || []).map((hook, index) => (
+                        <div className="hook-line-row" key={`viral-hook-${index}`}>
+                          <p>{hook}</p>
+                          <div className="hook-line-actions">
+                            <button className="secondary-btn" onClick={() => copyText(`viral_hook_${index}`, hook)} type="button">
+                              {copiedKey === `viral_hook_${index}` ? "Copiado!" : "Copiar"}
+                            </button>
+                            <button className="secondary-btn" onClick={() => setSelectedGeneratedHook(hook)} type="button">
+                              {selectedGeneratedHook === hook ? "Selecionado" : "Escolher"}
+                            </button>
+                            <button className="secondary-btn" onClick={() => saveViralHookFavorite(hook)} type="button">
+                              Favoritar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="output-card">
+                    <h3>5 frases para texto grande no vídeo</h3>
+                    <div className="hook-lines-list">
+                      {(viralHooksGenerated.overlayTexts || []).map((line, index) => (
+                        <div className="hook-line-row" key={`viral-overlay-${index}`}>
+                          <p>{line}</p>
+                          <button className="secondary-btn" onClick={() => copyText(`viral_overlay_${index}`, line)} type="button">
+                            {copiedKey === `viral_overlay_${index}` ? "Copiado!" : "Copiar"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="output-card">
+                    <h3>5 chamadas para WhatsApp</h3>
+                    <div className="hook-lines-list">
+                      {(viralHooksGenerated.whatsappCalls || []).map((line, index) => (
+                        <div className="hook-line-row" key={`viral-whatsapp-${index}`}>
+                          <p>{line}</p>
+                          <button className="secondary-btn" onClick={() => copyText(`viral_whatsapp_${index}`, line)} type="button">
+                            {copiedKey === `viral_whatsapp_${index}` ? "Copiado!" : "Copiar"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="output-card">
+                    <h3>3 ideias de abertura visual</h3>
+                    <div className="hook-lines-list">
+                      {(viralHooksGenerated.visualOpenings || []).map((line, index) => (
+                        <div className="hook-line-row" key={`viral-opening-${index}`}>
+                          <p>{line}</p>
+                          <button className="secondary-btn" onClick={() => copyText(`viral_opening_${index}`, line)} type="button">
+                            {copiedKey === `viral_opening_${index}` ? "Copiado!" : "Copiar"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+
+                  <article className="output-card">
+                    <h3>Roteiro rápido de 8 segundos</h3>
+                    <p>{viralHooksGenerated.videoScript}</p>
+                    <button className="secondary-btn" onClick={() => copyText("viral_video_script", viralHooksGenerated.videoScript)} type="button">
+                      {copiedKey === "viral_video_script" ? "Copiado!" : "Copiar"}
+                    </button>
+                  </article>
+                </div>
+              </>
+            ) : (
+              <p className="empty-state">Escolha as opções e toque em "Gerar ganchos virais".</p>
+            )}
+
+            <div className="subcard">
+              <h3>Ganchos favoritos</h3>
+              {viralHookFavorites.length ? (
+                <div className="favorites-grid">
+                  {viralHookFavorites.map((favorite) => (
+                    <article className="favorite-card" key={favorite.id}>
+                      <strong>{favorite.text}</strong>
+                      <p>
+                        {favorite.product} • {favorite.hookStyle} • {favorite.channel}
+                      </p>
+                      <p>Salvo em: {favorite.createdAt}</p>
+                      <div className="grid-two">
+                        <button className="secondary-btn" onClick={() => copyText(`viral_fav_${favorite.id}`, favorite.text)} type="button">
+                          {copiedKey === `viral_fav_${favorite.id}` ? "Copiado!" : "Copiar"}
+                        </button>
+                        <button className="secondary-btn" onClick={() => useHookInIntelligentCampaign(favorite.text)} type="button">
+                          Usar na Campanha Inteligente
+                        </button>
+                        <button className="secondary-btn" onClick={() => setSelectedGeneratedHook(favorite.text)} type="button">
+                          Selecionar
+                        </button>
+                        <button className="secondary-btn" onClick={() => deleteViralHookFavorite(favorite.id)} type="button">
+                          Excluir
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty-state">Nenhum gancho favorito salvo ainda.</p>
+              )}
+            </div>
           </section>
         ) : null}
 

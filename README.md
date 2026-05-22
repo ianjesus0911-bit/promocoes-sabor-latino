@@ -26,6 +26,8 @@ A **Campanha Inteligente** e o módulo **Inspirações & Imagens** usam backend 
 - Endpoint no frontend: `POST /.netlify/functions/generate-campaign`
 - Função: `netlify/functions/adapt-inspiration.js`
 - Endpoint no frontend: `POST /.netlify/functions/adapt-inspiration`
+- Função: `netlify/functions/generate-hooks.js`
+- Endpoint no frontend: `POST /.netlify/functions/generate-hooks`
 - Modelo usado: `gpt-4o-mini`
 - Prompt de sistema fixo no backend (não exposto no React)
 
@@ -76,6 +78,16 @@ Arquivo de referência local:
 2. Ao tocar em **✨ Adaptar para Sabor Latino**, o frontend envia os dados para `/.netlify/functions/adapt-inspiration`.
 3. A function retorna JSON com adaptação original (gancho, texto da plataforma, WhatsApp, prompt de imagem, roteiro, hashtags e CTA).
 4. Se a IA falhar, a função e o frontend usam fallback local para manter a experiência fluida.
+
+---
+
+## Fluxo de Ganchos Virais com IA
+
+1. Usuário escolhe produto, estilo de gancho e canal.
+2. O frontend chama `/.netlify/functions/generate-hooks`.
+3. A resposta retorna ganchos, frases de vídeo, CTAs de WhatsApp e roteiro curto.
+4. Ao tocar em **Usar na Campanha Inteligente**, o gancho é salvo no `localStorage` na chave `gancho_selecionado`.
+5. A Campanha Inteligente reaproveita esse gancho como frase inicial em TikTok, Story, roteiro e frase de impacto.
 
 ---
 
