@@ -272,6 +272,39 @@ const quickActionConfigs = {
   },
 };
 
+const historyResultChannels = ["WhatsApp", "Instagram Story", "Instagram Feed", "Facebook", "TikTok"];
+
+const defaultHistoryResultForm = {
+  publishedAt: "",
+  channelUsed: "WhatsApp",
+  productPromoted: "",
+  views: "",
+  likes: "",
+  comments: "",
+  shares: "",
+  saves: "",
+  whatsappClicks: "",
+  ordersGenerated: "",
+  soldApprox: "",
+  notes: "",
+};
+
+const channelFormatSuggestion = {
+  WhatsApp: "Status + mensagem direta no WhatsApp",
+  "Instagram Story": "Story vertical 9:16 com texto curto",
+  "Instagram Feed": "Feed 4:5 com close apetitoso",
+  Facebook: "Post local com chamada para família",
+  TikTok: "Vídeo curto com gancho nos primeiros segundos",
+};
+
+const productVisualSuggestion = {
+  almoço: "prato completo com vapor e cara de comida caseira",
+  pizza: "fatia com queijo puxando e forno ao fundo",
+  "ropa vieja cubana": "carne desfiada brilhante com toque artesanal",
+  sobremesa: "textura cremosa em close com luz quente",
+  "combo familiar": "mesa farta com clima de família",
+};
+
 const imageOutputFields = [
   { key: "fullPrompt", title: "Prompt completo para imagem" },
   { key: "shortOverlayText", title: "Texto curto para colocar sobre a imagem" },
@@ -546,6 +579,7 @@ function App() {
   const [generated, setGenerated] = usePersistentState("promocoes.generated", null);
   const [favoritePromotions, setFavoritePromotions] = usePersistentState("promocoes.favorites", []);
   const [historyItems, setHistoryItems] = usePersistentState("promocoes.historico", []);
+  const [historyResults, setHistoryResults] = usePersistentState("promocoes.historico.resultados", []);
   const [imageBuilder, setImageBuilder] = usePersistentState("promocoes.imageBuilder", defaultImageBuilder);
   const [imageGenerated, setImageGenerated] = usePersistentState("promocoes.imageGenerated", null);
   const [inspirations, setInspirations] = usePersistentState("promocoes.inspiracoes", []);
@@ -583,6 +617,9 @@ function App() {
   const [quickGenerated, setQuickGenerated] = useState(null);
   const [quickLoading, setQuickLoading] = useState(false);
   const [quickFeedback, setQuickFeedback] = useState("");
+  const [historyResultEditingId, setHistoryResultEditingId] = useState("");
+  const [historyResultForm, setHistoryResultForm] = useState(defaultHistoryResultForm);
+  const [historyResultFeedback, setHistoryResultFeedback] = useState("");
   const [instagramFeedback, setInstagramFeedback] = useState("");
   const [instagramManualFeedback, setInstagramManualFeedback] = useState("");
   const [instagramProfileInput, setInstagramProfileInput] = useState(
@@ -841,6 +878,177 @@ function App() {
     instagramMetrics.topDishByOrders,
   ]);
 
+  const mapProductToCampaignKey = (value) => {
+    const text = String(value || "").toLowerCase();
+    if (text.includes("pizza")) return "pizza";
+    if (text.includes("ropa")) return "ropa vieja cubana";
+    if (text.includes("sobremesa") || text.includes("doce")) return "sobremesa";
+    if (text.includes("combo")) return "combo familiar";
+    return "almoço";
+  };
+
+  const parseHistoryResultDate = (value) => {
+    const parsed = new Date(String(value || "").replace(" ", "T"));
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  };
+
+  const historyResultByCampaignId = useMemo(() => {
+    const map = {};
+    if (!Array.isArray(historyResults)) return map;
+    for (const row of historyResults) {
+      if (!row?.campaignId) continue;
+      map[row.campaignId] = row;
+    }
+    return map;
+  }, [historyResults]);
+
+  const historyResultsList = useMemo(() => {
+    if (!Array.isArray(historyResults)) return [];
+    return historyResults.map((row) => ({
+      ...row,
+      publishedAt: row.publishedAt || "",
+      channelUsed: row.channelUsed || "WhatsApp",
+      productPromoted: row.productPromoted || "",
+      views: Number(row.views) || 0,
+      likes: Number(row.likes) || 0,
+      comments: Number(row.comments) || 0,
+      shares: Number(row.shares) || 0,
+      saves: Number(row.saves) || 0,
+      whatsappClicks: Number(row.whatsappClicks) || 0,
+      ordersGenerated: Number(row.ordersGenerated) || 0,
+      soldApprox: Number(row.soldApprox) || 0,
+      notes: row.notes || "",
+    }));
+  }, [historyResults]);
+
+  const historyResultsSummary = useMemo(() => {
+    const rows = historyResultsList;
+    if (!rows.length) {
+      return {
+        totalOrders: 0,
+        totalSoldApprox: 0,
+        publishedCampaigns: 0,
+        bestChannel: "WhatsApp",
+        bestCampaignOfWeek: "Sem dados ainda",
+        topProductBySales: "Ropa vieja cubana",
+        topChannelByOrders: "WhatsApp",
+        bestHourObserved: "18h - 20h",
+        topTextType: "direto para vender",
+        recommendationNext:
+          "Registre resultados no Histórico para receber recomendações mais precisas para a próxima campanha.",
+        hasData: false,
+      };
+    }
+
+    const totalOrders = rows.reduce((sum, row) => sum + row.ordersGenerated, 0);
+    const totalSoldApprox = rows.reduce((sum, row) => sum + row.soldApprox, 0);
+
+    const byChannel = rows.reduce((acc, row) => {
+      acc[row.channelUsed] = (acc[row.channelUsed] || 0) + row.ordersGenerated;
+      return acc;
+    }, {});
+
+    const byProductOrders = rows.reduce((acc, row) => {
+      const key = row.productPromoted || "Produto não informado";
+      acc[key] = (acc[key] || 0) + row.ordersGenerated;
+      return acc;
+    }, {});
+
+    const byProductSold = rows.reduce((acc, row) => {
+      const key = row.productPromoted || "Produto não informado";
+      acc[key] = (acc[key] || 0) + row.soldApprox;
+      return acc;
+    }, {});
+
+    const bestChannel =
+      Object.entries(byChannel)
+        .sort((a, b) => b[1] - a[1])
+        .map(([channel]) => channel)[0] || "WhatsApp";
+
+    const topProductBySales =
+      Object.entries(byProductSold)
+        .sort((a, b) => b[1] - a[1])
+        .map(([product]) => product)[0] ||
+      Object.entries(byProductOrders)
+        .sort((a, b) => b[1] - a[1])
+        .map(([product]) => product)[0] ||
+      "Ropa vieja cubana";
+
+    const hourScores = rows.reduce((acc, row) => {
+      const date = parseHistoryResultDate(row.publishedAt);
+      if (!date) return acc;
+      const hour = date.getHours();
+      if (!acc[hour]) acc[hour] = 0;
+      acc[hour] += row.ordersGenerated * 5 + row.whatsappClicks * 1.5 + row.views * 0.02;
+      return acc;
+    }, {});
+
+    const bestHour =
+      Object.entries(hourScores)
+        .sort((a, b) => b[1] - a[1])
+        .map(([hour]) => Number(hour))[0] ?? 19;
+    const bestHourObserved = `${String(bestHour).padStart(2, "0")}h - ${String((bestHour + 2) % 24).padStart(2, "0")}h`;
+
+    const historyById = rows.reduce((acc, row) => {
+      if (row.campaignId) acc[row.campaignId] = row;
+      return acc;
+    }, {});
+
+    const textTypeScores = historyItems.reduce((acc, item) => {
+      const result = historyById[item.id];
+      if (!result) return acc;
+      const textType = String(item.tone || "direto para vender").toLowerCase();
+      const score = result.ordersGenerated * 5 + result.whatsappClicks * 2 + result.shares;
+      acc[textType] = (acc[textType] || 0) + score;
+      return acc;
+    }, {});
+
+    const topTextType =
+      Object.entries(textTypeScores)
+        .sort((a, b) => b[1] - a[1])
+        .map(([textType]) => textType)[0] || "direto para vender";
+
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(weekStart.getDate() - 6);
+
+    const weekRows = rows.filter((row) => {
+      const date = parseHistoryResultDate(row.publishedAt);
+      return date && date >= weekStart && date <= now;
+    });
+
+    const rankedRows = (weekRows.length ? weekRows : rows).map((row) => {
+      const campaign = historyItems.find((item) => item.id === row.campaignId);
+      const score = row.ordersGenerated * 6 + row.soldApprox * 0.05 + row.whatsappClicks * 1.7 + row.shares;
+      return {
+        ...row,
+        score,
+        label: campaign?.promotionType || row.campaignLabel || "Campanha registrada",
+      };
+    });
+
+    const bestCampaignOfWeek =
+      rankedRows.sort((a, b) => b.score - a.score).map((row) => row.label)[0] || "Sem dados ainda";
+
+    const recommendationNext = `Próxima campanha: foque em ${topProductBySales} no canal ${bestChannel}, entre ${bestHourObserved}, com tom ${topTextType}.`;
+
+    return {
+      totalOrders,
+      totalSoldApprox,
+      publishedCampaigns: rows.length,
+      bestChannel,
+      bestCampaignOfWeek,
+      topProductBySales,
+      topChannelByOrders: bestChannel,
+      bestHourObserved,
+      topTextType,
+      recommendationNext,
+      hasData: true,
+    };
+  }, [historyItems, historyResultsList]);
+
   const createHistoryRecord = (payload) => ({
     id: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     createdAt: new Date().toLocaleString("pt-BR"),
@@ -862,6 +1070,97 @@ function App() {
     const lines = clean.split("\n").map((line) => line.trim()).filter(Boolean);
     if (lines.length <= 2) return lines.join("\n");
     return `${lines[0]}\n${lines[1]}`;
+  };
+
+  const getLocalDateTimeInputValue = (dateValue = new Date()) => {
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  };
+
+  const inferProductFromHistoryItem = (item) => {
+    const source = `${item?.promotionType || ""} ${item?.whatsappText || ""}`.toLowerCase();
+    if (source.includes("pizza")) return "pizza cubana";
+    if (source.includes("ropa")) return "ropa vieja cubana";
+    if (source.includes("sobremesa") || source.includes("doce")) return "sobremesa";
+    if (source.includes("combo")) return "combo familiar";
+    return "almoço";
+  };
+
+  const formatCurrencyBRL = (value) => {
+    const numeric = Number(value) || 0;
+    return numeric.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  };
+
+  const startHistoryResultRegistration = (item) => {
+    const existing = historyResultByCampaignId[item.id];
+    if (existing) {
+      setHistoryResultForm({
+        publishedAt: existing.publishedAt || "",
+        channelUsed: existing.channelUsed || "WhatsApp",
+        productPromoted: existing.productPromoted || inferProductFromHistoryItem(item),
+        views: String(existing.views ?? ""),
+        likes: String(existing.likes ?? ""),
+        comments: String(existing.comments ?? ""),
+        shares: String(existing.shares ?? ""),
+        saves: String(existing.saves ?? ""),
+        whatsappClicks: String(existing.whatsappClicks ?? ""),
+        ordersGenerated: String(existing.ordersGenerated ?? ""),
+        soldApprox: String(existing.soldApprox ?? ""),
+        notes: existing.notes || "",
+      });
+      setHistoryResultEditingId(item.id);
+      return;
+    }
+
+    setHistoryResultForm({
+      ...defaultHistoryResultForm,
+      publishedAt: getLocalDateTimeInputValue(),
+      channelUsed: historyResultChannels.includes(item.channel) ? item.channel : "WhatsApp",
+      productPromoted: inferProductFromHistoryItem(item),
+    });
+    setHistoryResultEditingId(item.id);
+  };
+
+  const updateHistoryResultFormField = (field, value) => {
+    setHistoryResultForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const cancelHistoryResultRegistration = () => {
+    setHistoryResultEditingId("");
+    setHistoryResultForm(defaultHistoryResultForm);
+  };
+
+  const saveHistoryResultRegistration = () => {
+    if (!historyResultEditingId) return;
+    const campaign = historyItems.find((item) => item.id === historyResultEditingId);
+    const existing = historyResultByCampaignId[historyResultEditingId];
+
+    const record = {
+      id: existing?.id || `hist-res-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      campaignId: historyResultEditingId,
+      campaignLabel: campaign?.promotionType || existing?.campaignLabel || "Campanha registrada",
+      publishedAt: historyResultForm.publishedAt || getLocalDateTimeInputValue(),
+      channelUsed: historyResultForm.channelUsed || "WhatsApp",
+      productPromoted: historyResultForm.productPromoted || inferProductFromHistoryItem(campaign),
+      views: Number(historyResultForm.views) || 0,
+      likes: Number(historyResultForm.likes) || 0,
+      comments: Number(historyResultForm.comments) || 0,
+      shares: Number(historyResultForm.shares) || 0,
+      saves: Number(historyResultForm.saves) || 0,
+      whatsappClicks: Number(historyResultForm.whatsappClicks) || 0,
+      ordersGenerated: Number(historyResultForm.ordersGenerated) || 0,
+      soldApprox: Number(historyResultForm.soldApprox) || 0,
+      notes: String(historyResultForm.notes || "").trim(),
+      updatedAt: new Date().toISOString(),
+      createdAt: existing?.createdAt || new Date().toISOString(),
+    };
+
+    setHistoryResults((current) => [record, ...current.filter((item) => item.campaignId !== historyResultEditingId)]);
+    setHistoryResultEditingId("");
+    setHistoryResultForm(defaultHistoryResultForm);
+    setHistoryResultFeedback("Resultado registrado com sucesso.");
+    setTimeout(() => setHistoryResultFeedback(""), 1800);
   };
 
   const buildQuickFallbackPack = (action) => {
@@ -1292,14 +1591,28 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
   const generateIntelligentCampaignNow = async (payload = intelligentCampaignBuilder) => {
     setIntelligentCampaignLoading(true);
     try {
-      const manualInsights = buildManualInstagramInsights({
+      const instagramBaseInsights = buildManualInstagramInsights({
         instagramMetrics,
         selectedProduct: payload.product,
         channel: payload.mainChannel,
         moment: payload.moment,
       });
 
-      const localPack = generateIntelligentCampaignPack({
+      const historyInsights = historyResultsSummary.hasData
+        ? {
+            source: "manual",
+            topProduct: mapProductToCampaignKey(historyResultsSummary.topProductBySales),
+            bestFormat: channelFormatSuggestion[historyResultsSummary.topChannelByOrders] || instagramBaseInsights.bestFormat,
+            bestHour: historyResultsSummary.bestHourObserved || instagramBaseInsights.bestHour,
+            bestVisualStyle:
+              productVisualSuggestion[mapProductToCampaignKey(historyResultsSummary.topProductBySales)] ||
+              instagramBaseInsights.bestVisualStyle,
+          }
+        : null;
+
+      const manualInsights = historyInsights || instagramBaseInsights;
+
+      let localPack = generateIntelligentCampaignPack({
         product: payload.product,
         objective: payload.objective,
         audience: payload.audience,
@@ -1309,6 +1622,14 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
         settings,
         instagramInsights: manualInsights,
       });
+
+      if (historyResultsSummary.hasData) {
+        localPack = {
+          ...localPack,
+          recommendationSourceNotice:
+            "Recomendação baseada em resultados manuais do Histórico e desempenho real das campanhas.",
+        };
+      }
 
       let finalPack = localPack;
       let feedbackMessage = "Campanha inteligente gerada com sucesso!";
@@ -1335,6 +1656,12 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
               topDishByOrders: instagramMetrics.topDishByOrders,
               bestObservedHourRange: instagramMetrics.bestObservedHourRange,
               recommendationToday: instagramMetrics.recommendationToday,
+              historyResultsCount: historyResultsSummary.publishedCampaigns,
+              historyTopProduct: historyResultsSummary.topProductBySales,
+              historyTopChannel: historyResultsSummary.topChannelByOrders,
+              historyBestHour: historyResultsSummary.bestHourObserved,
+              historyTopTextType: historyResultsSummary.topTextType,
+              historyRecommendation: historyResultsSummary.recommendationNext,
             },
           }),
         });
@@ -1732,6 +2059,26 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
   };
 
   const buildHistoryCopy = (item) => {
+    const result = historyResultByCampaignId[item.id];
+    const resultBlock = result
+      ? [
+          "",
+          "Resultado registrado:",
+          `Data da publicação: ${result.publishedAt ? formatInstagramPostDate(result.publishedAt) : "não informada"}`,
+          `Canal usado: ${result.channelUsed || "não informado"}`,
+          `Produto promovido: ${result.productPromoted || "não informado"}`,
+          `Visualizações: ${Number(result.views) || 0}`,
+          `Curtidas: ${Number(result.likes) || 0}`,
+          `Comentários: ${Number(result.comments) || 0}`,
+          `Compartilhamentos: ${Number(result.shares) || 0}`,
+          `Salvamentos: ${Number(result.saves) || 0}`,
+          `Cliques no WhatsApp: ${Number(result.whatsappClicks) || 0}`,
+          `Pedidos gerados: ${Number(result.ordersGenerated) || 0}`,
+          `Valor vendido aproximado: ${formatCurrencyBRL(result.soldApprox)}`,
+          `Observações: ${result.notes || "sem observações"}`,
+        ]
+      : ["", "Resultado registrado: ainda não informado."];
+
     return [
       `Data e hora: ${item.createdAt}`,
       `Tipo de promoção: ${item.promotionType}`,
@@ -1755,6 +2102,7 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
       "",
       "Prompt de imagem:",
       item.imagePrompt || "Não gerado",
+      ...resultBlock,
     ].join("\n");
   };
 
@@ -1764,6 +2112,10 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
 
   const deleteHistoryItem = (historyId) => {
     setHistoryItems((current) => current.filter((item) => item.id !== historyId));
+    setHistoryResults((current) => current.filter((item) => item.campaignId !== historyId));
+    if (historyResultEditingId === historyId) {
+      cancelHistoryResultRegistration();
+    }
   };
 
   const toggleHistoryFavorite = (historyId) => {
@@ -2141,6 +2493,12 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
           <section className="card">
             <h2>Campanha Inteligente</h2>
             <p className="muted">Campanha completa com estratégia, conteúdo e recomendação orientada por dados.</p>
+            {historyResultsSummary.hasData ? (
+              <p className="hint">
+                Usando resultados manuais do Histórico: melhor canal {historyResultsSummary.topChannelByOrders}, melhor
+                horário {historyResultsSummary.bestHourObserved} e produto destaque {historyResultsSummary.topProductBySales}.
+              </p>
+            ) : null}
 
             <div className="form-grid">
               <label>
@@ -3266,50 +3624,235 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
           <section className="card">
             <h2>Histórico</h2>
             <p className="muted">Registro automático das promoções geradas.</p>
+            {historyResultFeedback ? <p className="hint">{historyResultFeedback}</p> : null}
+
+            <div className="subcard">
+              <h3>Painel de resultados reais</h3>
+              <div className="history-results-grid">
+                <article className="metric-card">
+                  <span>Total de pedidos gerados</span>
+                  <strong>{historyResultsSummary.totalOrders}</strong>
+                </article>
+                <article className="metric-card">
+                  <span>Total vendido aproximado</span>
+                  <strong>{formatCurrencyBRL(historyResultsSummary.totalSoldApprox)}</strong>
+                </article>
+                <article className="metric-card">
+                  <span>Campanhas publicadas</span>
+                  <strong>{historyResultsSummary.publishedCampaigns}</strong>
+                </article>
+                <article className="metric-card">
+                  <span>Melhor canal</span>
+                  <strong>{historyResultsSummary.bestChannel}</strong>
+                </article>
+              </div>
+
+              <div className="recommendation-list">
+                <p>• Melhor campanha da semana: {historyResultsSummary.bestCampaignOfWeek}</p>
+                <p>• Produto que mais vendeu: {historyResultsSummary.topProductBySales}</p>
+                <p>• Canal que mais trouxe pedidos: {historyResultsSummary.topChannelByOrders}</p>
+                <p>• Melhor horário observado: {historyResultsSummary.bestHourObserved}</p>
+                <p>• Tipo de texto que mais funcionou: {historyResultsSummary.topTextType}</p>
+                <p>• Recomendação para próxima campanha: {historyResultsSummary.recommendationNext}</p>
+              </div>
+            </div>
 
             {historyItems.length ? (
               <div className="history-grid">
-                {historyItems.map((item) => (
-                  <article className="history-card" key={item.id}>
-                    <div className="history-top">
-                      <strong>{item.promotionType || "Promoção"}</strong>
-                      {item.isFavorite ? <span className="meta-chip">Favorita</span> : null}
-                    </div>
-                    <p>
-                      {item.createdAt} • Canal: {item.channel || "não informado"} • Tom: {item.tone || "não informado"}
-                    </p>
-                    <p>
-                      <strong>WhatsApp:</strong> {item.whatsappText || "Não gerado"}
-                    </p>
-                    <p>
-                      <strong>Instagram:</strong> {item.instagramText || "Não gerado"}
-                    </p>
-                    <p>
-                      <strong>Facebook:</strong> {item.facebookText || "Não gerado"}
-                    </p>
-                    <p>
-                      <strong>Hashtags:</strong> {item.hashtags || "Não gerado"}
-                    </p>
-                    <p>
-                      <strong>Roteiro de vídeo:</strong> {item.videoScript || "Não gerado"}
-                    </p>
-                    <p>
-                      <strong>Prompt de imagem:</strong> {item.imagePrompt || "Não gerado"}
-                    </p>
+                {historyItems.map((item) => {
+                  const campaignResult = historyResultByCampaignId[item.id] || null;
+                  const isEditing = historyResultEditingId === item.id;
 
-                    <div className="history-actions">
-                      <button className="secondary-btn" onClick={() => copyHistoryItem(item)} type="button">
-                        {copiedKey === `history_${item.id}` ? "Copiado!" : "Copiar promoção"}
-                      </button>
-                      <button className="secondary-btn" onClick={() => toggleHistoryFavorite(item.id)} type="button">
-                        {item.isFavorite ? "Desfavoritar" : "Favoritar"}
-                      </button>
-                      <button className="secondary-btn" onClick={() => deleteHistoryItem(item.id)} type="button">
-                        Excluir
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                  return (
+                    <article className="history-card" key={item.id}>
+                      <div className="history-top">
+                        <strong>{item.promotionType || "Promoção"}</strong>
+                        <div className="history-top-tags">
+                          {campaignResult ? <span className="meta-chip">Resultado registrado</span> : null}
+                          {item.isFavorite ? <span className="meta-chip">Favorita</span> : null}
+                        </div>
+                      </div>
+                      <p>
+                        {item.createdAt} • Canal: {item.channel || "não informado"} • Tom: {item.tone || "não informado"}
+                      </p>
+                      <p>
+                        <strong>WhatsApp:</strong> {item.whatsappText || "Não gerado"}
+                      </p>
+                      <p>
+                        <strong>Instagram:</strong> {item.instagramText || "Não gerado"}
+                      </p>
+                      <p>
+                        <strong>Facebook:</strong> {item.facebookText || "Não gerado"}
+                      </p>
+                      <p>
+                        <strong>Hashtags:</strong> {item.hashtags || "Não gerado"}
+                      </p>
+                      <p>
+                        <strong>Roteiro de vídeo:</strong> {item.videoScript || "Não gerado"}
+                      </p>
+                      <p>
+                        <strong>Prompt de imagem:</strong> {item.imagePrompt || "Não gerado"}
+                      </p>
+
+                      {campaignResult ? (
+                        <div className="history-result-preview">
+                          <p>
+                            <strong>Resultado:</strong> {campaignResult.ordersGenerated} pedidos •{" "}
+                            {formatCurrencyBRL(campaignResult.soldApprox)} • {campaignResult.channelUsed}
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <div className="history-actions">
+                        <button className="secondary-btn" onClick={() => copyHistoryItem(item)} type="button">
+                          {copiedKey === `history_${item.id}` ? "Copiado!" : "Copiar promoção"}
+                        </button>
+                        <button className="secondary-btn" onClick={() => toggleHistoryFavorite(item.id)} type="button">
+                          {item.isFavorite ? "Desfavoritar" : "Favoritar"}
+                        </button>
+                        <button className="secondary-btn" onClick={() => startHistoryResultRegistration(item)} type="button">
+                          {campaignResult ? "Editar resultado" : "Registrar resultado"}
+                        </button>
+                        <button className="secondary-btn" onClick={() => deleteHistoryItem(item.id)} type="button">
+                          Excluir
+                        </button>
+                      </div>
+
+                      {isEditing ? (
+                        <form
+                          className="form-grid history-result-form"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            saveHistoryResultRegistration();
+                          }}
+                        >
+                          <label>
+                            Data da publicação
+                            <input
+                              onChange={(event) => updateHistoryResultFormField("publishedAt", event.target.value)}
+                              required
+                              type="datetime-local"
+                              value={historyResultForm.publishedAt}
+                            />
+                          </label>
+                          <label>
+                            Canal usado
+                            <select
+                              onChange={(event) => updateHistoryResultFormField("channelUsed", event.target.value)}
+                              value={historyResultForm.channelUsed}
+                            >
+                              {historyResultChannels.map((channelOption) => (
+                                <option key={channelOption} value={channelOption}>
+                                  {channelOption}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="full-width">
+                            Produto promovido
+                            <input
+                              onChange={(event) => updateHistoryResultFormField("productPromoted", event.target.value)}
+                              placeholder="Ex: Ropa vieja cubana"
+                              required
+                              type="text"
+                              value={historyResultForm.productPromoted}
+                            />
+                          </label>
+                          <label>
+                            Visualizações
+                            <input
+                              min="0"
+                              onChange={(event) => updateHistoryResultFormField("views", event.target.value)}
+                              type="number"
+                              value={historyResultForm.views}
+                            />
+                          </label>
+                          <label>
+                            Curtidas
+                            <input
+                              min="0"
+                              onChange={(event) => updateHistoryResultFormField("likes", event.target.value)}
+                              type="number"
+                              value={historyResultForm.likes}
+                            />
+                          </label>
+                          <label>
+                            Comentários
+                            <input
+                              min="0"
+                              onChange={(event) => updateHistoryResultFormField("comments", event.target.value)}
+                              type="number"
+                              value={historyResultForm.comments}
+                            />
+                          </label>
+                          <label>
+                            Compartilhamentos
+                            <input
+                              min="0"
+                              onChange={(event) => updateHistoryResultFormField("shares", event.target.value)}
+                              type="number"
+                              value={historyResultForm.shares}
+                            />
+                          </label>
+                          <label>
+                            Salvamentos
+                            <input
+                              min="0"
+                              onChange={(event) => updateHistoryResultFormField("saves", event.target.value)}
+                              type="number"
+                              value={historyResultForm.saves}
+                            />
+                          </label>
+                          <label>
+                            Cliques no WhatsApp
+                            <input
+                              min="0"
+                              onChange={(event) => updateHistoryResultFormField("whatsappClicks", event.target.value)}
+                              type="number"
+                              value={historyResultForm.whatsappClicks}
+                            />
+                          </label>
+                          <label>
+                            Pedidos gerados
+                            <input
+                              min="0"
+                              onChange={(event) => updateHistoryResultFormField("ordersGenerated", event.target.value)}
+                              type="number"
+                              value={historyResultForm.ordersGenerated}
+                            />
+                          </label>
+                          <label>
+                            Valor vendido aproximado
+                            <input
+                              min="0"
+                              onChange={(event) => updateHistoryResultFormField("soldApprox", event.target.value)}
+                              step="0.01"
+                              type="number"
+                              value={historyResultForm.soldApprox}
+                            />
+                          </label>
+                          <label className="full-width">
+                            Observações
+                            <textarea
+                              onChange={(event) => updateHistoryResultFormField("notes", event.target.value)}
+                              placeholder="Ex: Story com close do prato gerou mais pedidos."
+                              rows={3}
+                              value={historyResultForm.notes}
+                            />
+                          </label>
+                          <div className="grid-two full-width">
+                            <button className="primary-btn" type="submit">
+                              Salvar resultado
+                            </button>
+                            <button className="secondary-btn" onClick={cancelHistoryResultRegistration} type="button">
+                              Cancelar
+                            </button>
+                          </div>
+                        </form>
+                      ) : null}
+                    </article>
+                  );
+                })}
               </div>
             ) : (
               <p className="empty-state">Nenhuma promoção registrada no histórico ainda.</p>

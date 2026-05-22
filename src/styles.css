@@ -352,11 +352,40 @@ textarea {
   gap: 0.6rem;
 }
 
+.history-top-tags {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
 .history-actions {
   margin-top: 0.4rem;
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.history-results-grid {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.history-result-preview {
+  margin-top: 0.35rem;
+  border: 1px dashed #efc79c;
+  border-radius: 10px;
+  background: #fff8ef;
+  padding: 0.55rem;
+}
+
+.history-result-form {
+  margin-top: 0.55rem;
+  border: 1px solid #f3d8bb;
+  border-radius: 12px;
+  background: #fffdf8;
+  padding: 0.7rem;
 }
 
 .instagram-connection {
@@ -614,6 +643,7 @@ textarea {
 @media (max-width: 760px) {
   .grid-two,
   .form-grid,
+  .history-results-grid,
   .instagram-metrics-grid,
   .campaign-recommendation-grid,
   .smart-actions-grid,
