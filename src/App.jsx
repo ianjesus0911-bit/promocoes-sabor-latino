@@ -307,13 +307,23 @@ const productVisualSuggestion = {
 
 const imageOutputFields = [
   { key: "fullPrompt", title: "Prompt completo para imagem" },
-  { key: "shortOverlayText", title: "Texto curto para colocar sobre a imagem" },
-  { key: "instagramDescription", title: "Descrição para Instagram" },
+  { key: "shortPrompt", title: "Prompt curto" },
+  { key: "captionIdea", title: "Ideia de legenda" },
+  { key: "storyText", title: "Texto para story" },
   { key: "hashtags", title: "Hashtags" },
   { key: "videoIdea", title: "Ideia de vídeo curto de 8 segundos" },
-  { key: "cameraAngleSuggestion", title: "Sugestão de ângulo da câmera" },
-  { key: "lightingSuggestion", title: "Sugestão de iluminação" },
-  { key: "impactPhrase", title: "Sugestão de frase de impacto" },
+];
+
+const inspirationAdaptationOutputFields = [
+  { key: "gancho", title: "Gancho (2 segundos)" },
+  { key: "texto_plataforma", title: "Texto para plataforma" },
+  { key: "whatsapp", title: "Texto curto para WhatsApp" },
+  { key: "frase_imagem", title: "Frase para imagem/story" },
+  { key: "prompt_imagem", title: "Prompt de imagem profissional" },
+  { key: "roteiro_video", title: "Roteiro de vídeo (8 segundos)" },
+  { key: "hashtags", title: "Hashtags" },
+  { key: "recomendacao_adaptacao", title: "Recomendação de adaptação sem copiar" },
+  { key: "cta_whatsapp", title: "CTA para WhatsApp" },
 ];
 
 const campaignDayOutputFields = [
@@ -617,6 +627,9 @@ function App() {
   const [quickGenerated, setQuickGenerated] = useState(null);
   const [quickLoading, setQuickLoading] = useState(false);
   const [quickFeedback, setQuickFeedback] = useState("");
+  const [inspirationAdaptation, setInspirationAdaptation] = useState(null);
+  const [inspirationAdaptationLoading, setInspirationAdaptationLoading] = useState(false);
+  const [inspirationAdaptationFeedback, setInspirationAdaptationFeedback] = useState("");
   const [historyResultEditingId, setHistoryResultEditingId] = useState("");
   const [historyResultForm, setHistoryResultForm] = useState(defaultHistoryResultForm);
   const [historyResultFeedback, setHistoryResultFeedback] = useState("");
@@ -719,6 +732,66 @@ function App() {
   const selectedInspiration = useMemo(() => {
     return inspirations.find((item) => item.id === imageBuilder.selectedInspirationId) || null;
   }, [imageBuilder.selectedInspirationId, inspirations]);
+
+  const inspirationAnalysis = useMemo(() => {
+    if (inspirations.length < 2) {
+      return {
+        hasEnoughData: false,
+        count: inspirations.length,
+      };
+    }
+
+    const countBy = (items, pick) =>
+      items.reduce((acc, item) => {
+        const key = pick(item) || "não informado";
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+
+    const topKey = (map) =>
+      Object.entries(map)
+        .sort((a, b) => b[1] - a[1])
+        .map(([key]) => key)[0] || "não informado";
+
+    const topPlatform = topKey(countBy(inspirations, (item) => item.platform));
+    const topContentType = topKey(countBy(inspirations, (item) => item.contentType));
+    const topVisualElement = topKey(countBy(inspirations, (item) => item.visualElement));
+
+    const inspirationWithMostViews =
+      [...inspirations].sort((a, b) => (b.metrics?.views || 0) - (a.metrics?.views || 0))[0] || null;
+    const inspirationWithMostSaves =
+      [...inspirations].sort((a, b) => (b.metrics?.saves || 0) - (a.metrics?.saves || 0))[0] || null;
+
+    const bestForToday =
+      [...inspirations]
+        .map((item) => {
+          const score =
+            (item.metrics?.views || 0) * 0.02 +
+            (item.metrics?.likes || 0) * 0.6 +
+            (item.metrics?.shares || 0) * 1.2 +
+            (item.metrics?.saves || 0) * 1.4 +
+            (item.adaptationIdea ? 180 : 0);
+          return { ...item, score };
+        })
+        .sort((a, b) => b.score - a.score)[0] || null;
+
+    const bestIdeaForToday = bestForToday
+      ? `${bestForToday.platform} • ${bestForToday.contentType}: ${
+          bestForToday.adaptationIdea || bestForToday.whyWorked || "usar gancho visual curto e CTA direto"
+        }`
+      : "Sem dados";
+
+    return {
+      hasEnoughData: true,
+      count: inspirations.length,
+      topPlatform,
+      topContentType,
+      topVisualElement,
+      inspirationWithMostViews,
+      inspirationWithMostSaves,
+      bestIdeaForToday,
+    };
+  }, [inspirations]);
 
   const instagramPostsList = useMemo(() => {
     if (!Array.isArray(instagramPosts)) return [];
@@ -1932,6 +2005,12 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
       .join("\n\n------------------------------\n\n");
   };
 
+  const buildAllInspirationAdaptationTexts = (content) => {
+    return inspirationAdaptationOutputFields
+      .map((field) => `${field.title}\n${content[field.key] || ""}`)
+      .join("\n\n------------------------------\n\n");
+  };
+
   const buildAllCampaignDayTexts = (content) => {
     return campaignDayOutputFields
       .map((field) => `${field.title}\n${content[field.key] || ""}`)
@@ -1968,6 +2047,11 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
     setTimeout(() => setImageCopyFeedback(""), 1800);
   };
 
+  const copyAllInspirationAdaptationTexts = () => {
+    if (!inspirationAdaptation) return;
+    copyText("all_inspiration_adaptation", buildAllInspirationAdaptationTexts(inspirationAdaptation));
+  };
+
   const copyAllCampaignDayTexts = () => {
     if (!campaignDayGenerated) return;
     copyText("all_campaign_day", buildAllCampaignDayTexts(campaignDayGenerated));
@@ -1996,6 +2080,12 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
   const openWhatsAppWithQuickGenerated = () => {
     if (!quickGenerated) return;
     const message = `${quickGenerated.whatsappText}\n${quickGenerated.ctaWhatsapp || ""}`.trim();
+    window.open(buildWhatsAppLink(settings.whatsappNumber, message), "_blank", "noreferrer");
+  };
+
+  const openWhatsAppWithInspirationAdaptation = () => {
+    if (!inspirationAdaptation) return;
+    const message = `${inspirationAdaptation.whatsapp}\n${inspirationAdaptation.cta_whatsapp || ""}`.trim();
     window.open(buildWhatsAppLink(settings.whatsappNumber, message), "_blank", "noreferrer");
   };
 
@@ -2219,6 +2309,207 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
     setInspirationForm((current) => ({ ...current, [field]: value }));
   };
 
+  const inferImageProductFromInspiration = (inspiration) => {
+    const text = `${inspiration?.niche || ""} ${inspiration?.visualElement || ""}`.toLowerCase();
+    if (text.includes("pizza")) return "Pizza cubana";
+    if (text.includes("cubana")) return "Ropa vieja cubana";
+    if (text.includes("sobremesa")) return "Sobremesa";
+    if (text.includes("bebida")) return "Bebida";
+    if (text.includes("restaurante cheio")) return "Restaurante cheio";
+    if (text.includes("pessoa comendo")) return "Pessoas comendo felizes";
+    if (text.includes("familiar")) return "Combo familiar";
+    return "Almoço latino";
+  };
+
+  const inferImageFormatFromInspiration = (inspiration) => {
+    const platform = String(inspiration?.platform || "").toLowerCase();
+    const contentType = String(inspiration?.contentType || "").toLowerCase();
+    if (platform.includes("tiktok") || contentType.includes("reel") || contentType.includes("story")) {
+      return "Instagram Story 9:16";
+    }
+    if (platform.includes("facebook")) return "Facebook Post";
+    if (contentType.includes("feed") || contentType.includes("foto")) return "Instagram Feed 4:5";
+    return "Instagram Story 9:16";
+  };
+
+  const inferImageStyleFromInspiration = (inspiration) => {
+    const text = `${inspiration?.visualElement || ""} ${inspiration?.whyWorked || ""}`.toLowerCase();
+    if (text.includes("vapor")) return "Comida quente com vapor";
+    if (text.includes("queijo") || text.includes("close")) return "Hiper-realista";
+    if (text.includes("restaurante cheio") || text.includes("pessoa comendo")) return "Familiar";
+    if (text.includes("viral")) return "Viral";
+    if (text.includes("elegante")) return "Elegante e profissional";
+    return "Caseiro e acolhedor";
+  };
+
+  const inferImageGoalFromInspiration = (inspiration) => {
+    const text = `${inspiration?.niche || ""} ${inspiration?.adaptationIdea || ""}`.toLowerCase();
+    if (text.includes("pizza")) return "Promover pizza";
+    if (text.includes("cubana")) return "Promover comida cubana";
+    if (text.includes("restaurante")) return "Atrair clientes para o restaurante";
+    if (text.includes("prato do dia")) return "Promover prato do dia";
+    if (text.includes("vender")) return "Vender rápido";
+    return "Dar fome";
+  };
+
+  const applyInspirationToImageBuilder = (inspiration) => {
+    setImageBuilder((current) => ({
+      ...current,
+      product: inferImageProductFromInspiration(inspiration),
+      format: inferImageFormatFromInspiration(inspiration),
+      visualStyle: inferImageStyleFromInspiration(inspiration),
+      goal: inferImageGoalFromInspiration(inspiration),
+      useSavedInspiration: "sim",
+      selectedInspirationId: inspiration.id || "",
+    }));
+  };
+
+  const buildInspirationFromForm = () => ({
+    id: `insp-form-${Date.now()}`,
+    createdAt: new Date().toLocaleString("pt-BR"),
+    link: inspirationForm.link,
+    platform: inspirationForm.platform,
+    contentType: inspirationForm.contentType,
+    niche: inspirationForm.niche,
+    visualElement: inspirationForm.visualElement,
+    metrics: {
+      views: Number(inspirationForm.views) || 0,
+      likes: Number(inspirationForm.likes) || 0,
+      comments: Number(inspirationForm.comments) || 0,
+      shares: Number(inspirationForm.shares) || 0,
+      saves: Number(inspirationForm.saves) || 0,
+    },
+    whyWorked: inspirationForm.whyWorked,
+    adaptationIdea: inspirationForm.adaptationIdea,
+  });
+
+  const buildInspirationAdaptationFallback = (inspiration) => {
+    const whatsapp = settings.whatsappNumber || FIXED_WHATSAPP_DISPLAY;
+    const product = inferImageProductFromInspiration(inspiration);
+    const platform = inspiration?.platform || "Instagram";
+    const visualElement = inspiration?.visualElement || "close-up";
+
+    return {
+      gancho: `Nova Bassano, olha isso saindo quente agora.`,
+      texto_plataforma: `${platform}: ${product} com foco em ${visualElement}. Mostre o prato em 2 segundos e finalize com convite para pedir no WhatsApp.`,
+      whatsapp: `Hoje no Sabor Latino tem ${product} saindo quentinho. Me chama no WhatsApp ${whatsapp} para pedir agora.`,
+      frase_imagem: `${product} quente, pedido no WhatsApp.`,
+      prompt_imagem: `Imagem publicitária original de ${product}, comida cubana/latina, close apetitoso, vapor visível, luz quente, mesa de restaurante familiar, Nova Bassano, composição limpa, sem texto na imagem, sem marca d'água, sem copiar imagens de terceiros.`,
+      roteiro_video: `Cena 1 (0-2s): close forte do ${product} com ${visualElement}. Cena 2 (2-6s): mostrar textura e vapor. Cena 3 (6-8s): CTA curto para pedir no WhatsApp ${whatsapp}.`,
+      hashtags: "#SaborLatino #NovaBassano #ComidaCubana #ComidaLatina #PedidoNoWhatsApp",
+      recomendacao_adaptacao:
+        "Use apenas a estrutura da inspiração (gancho, ritmo e elemento visual), mas grave cena e texto totalmente originais do Sabor Latino.",
+      cta_whatsapp: `Chame no WhatsApp ${whatsapp} e faça seu pedido agora.`,
+    };
+  };
+
+  const normalizeInspirationAdaptationPayload = (payload, fallback) => {
+    const requiredKeys = [
+      "gancho",
+      "texto_plataforma",
+      "whatsapp",
+      "frase_imagem",
+      "prompt_imagem",
+      "roteiro_video",
+      "hashtags",
+      "recomendacao_adaptacao",
+      "cta_whatsapp",
+    ];
+
+    const normalized = {};
+    for (const key of requiredKeys) {
+      const value = typeof payload?.[key] === "string" ? payload[key].trim() : "";
+      normalized[key] = value || fallback[key];
+    }
+    return normalized;
+  };
+
+  const adaptInspirationWithAI = async (inspiration, loadingMessage) => {
+    setInspirationAdaptationLoading(true);
+    setInspirationAdaptationFeedback(loadingMessage);
+    const fallback = buildInspirationAdaptationFallback(inspiration);
+
+    let finalAdaptation = fallback;
+    let usedFallback = false;
+    let timeoutId;
+
+    try {
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 12000);
+
+      const response = await fetch("/.netlify/functions/adapt-inspiration", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          inspiration,
+          settings: {
+            restaurantName: settings.restaurantName,
+            whatsappNumber: settings.whatsappNumber,
+            address: settings.address,
+            featuredDish: settings.featuredDish,
+            openingHours: settings.openingHours,
+          },
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof payload?.error === "string" ? payload.error : "Falha ao adaptar inspiração.");
+      }
+
+      finalAdaptation = normalizeInspirationAdaptationPayload(payload, fallback);
+    } catch (error) {
+      usedFallback = true;
+      finalAdaptation = fallback;
+      console.warn("Falha ao adaptar inspiração com IA:", error);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      setInspirationAdaptationLoading(false);
+    }
+
+    setInspirationAdaptation({
+      ...finalAdaptation,
+      inspirationId: inspiration.id || "",
+      generatedAt: new Date().toLocaleString("pt-BR"),
+    });
+    setInspirationAdaptationFeedback(
+      usedFallback
+        ? "Não foi possível usar IA agora. Criamos uma adaptação rápida para você."
+        : "Adaptação criada com sucesso para o Sabor Latino."
+    );
+  };
+
+  const adaptCurrentInspirationForm = async () => {
+    const draftInspiration = buildInspirationFromForm();
+    if (!draftInspiration.link.trim()) {
+      setInspirationAdaptationFeedback("Informe o link da publicação antes de adaptar.");
+      setTimeout(() => setInspirationAdaptationFeedback(""), 2200);
+      return;
+    }
+    await adaptInspirationWithAI(draftInspiration, "Adaptando para Sabor Latino...");
+  };
+
+  const adaptSavedInspiration = async (inspiration) => {
+    setInspirationForm({
+      link: inspiration.link || "",
+      platform: inspiration.platform || "Instagram",
+      contentType: inspiration.contentType || "Reel",
+      niche: inspiration.niche || "comida latina",
+      visualElement: inspiration.visualElement || "close-up",
+      views: String(inspiration.metrics?.views || ""),
+      likes: String(inspiration.metrics?.likes || ""),
+      comments: String(inspiration.metrics?.comments || ""),
+      shares: String(inspiration.metrics?.shares || ""),
+      saves: String(inspiration.metrics?.saves || ""),
+      whyWorked: inspiration.whyWorked || "",
+      adaptationIdea: inspiration.adaptationIdea || "",
+    });
+    await adaptInspirationWithAI(inspiration, "Adaptando inspiração para Sabor Latino...");
+  };
+
   const saveInspiration = (event) => {
     event.preventDefault();
 
@@ -2248,12 +2539,22 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
   };
 
   const useInspirationInGenerator = (inspiration) => {
-    setImageBuilder((current) => ({
-      ...current,
-      useSavedInspiration: "sim",
-      selectedInspirationId: inspiration.id,
-    }));
+    applyInspirationToImageBuilder(inspiration);
     setActiveSection("insp_imagens");
+  };
+
+  const copyInspirationIdea = (inspiration) => {
+    const content = [
+      `${inspiration.platform} • ${inspiration.contentType}`,
+      `Nicho: ${inspiration.niche}`,
+      `Elemento visual: ${inspiration.visualElement}`,
+      `Visualizações: ${inspiration.metrics?.views || 0}`,
+      `Curtidas: ${inspiration.metrics?.likes || 0}`,
+      `Salvamentos: ${inspiration.metrics?.saves || 0}`,
+      `Por que funcionou: ${inspiration.whyWorked || "não informado"}`,
+      `Ideia para Sabor Latino: ${inspiration.adaptationIdea || "não informada"}`,
+    ].join("\n");
+    copyText(`inspiration_copy_${inspiration.id}`, content);
   };
 
   const deleteInspiration = (inspirationId) => {
@@ -3469,8 +3770,74 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
                 <button className="primary-btn full-width" type="submit">
                   Salvar inspiração
                 </button>
+                <button
+                  className="primary-btn full-width"
+                  disabled={inspirationAdaptationLoading}
+                  onClick={adaptCurrentInspirationForm}
+                  type="button"
+                >
+                  ✨ Adaptar para Sabor Latino
+                </button>
               </form>
               {inspirationFeedback ? <p className="hint">{inspirationFeedback}</p> : null}
+              {!inspirationAdaptationLoading && inspirationAdaptationFeedback ? (
+                <p className="hint">{inspirationAdaptationFeedback}</p>
+              ) : null}
+              {inspirationAdaptationLoading ? (
+                <p className="hint">{inspirationAdaptationFeedback || "Adaptando para Sabor Latino..."}</p>
+              ) : null}
+              <p className="muted inspiration-ethics-note">
+                As inspirações são usadas apenas como referência estratégica. A app não copia publicações, imagens ou
+                identidade de terceiros.
+              </p>
+              <p className="hint">
+                <strong>{inspirations.length}</strong> inspirações salvas
+              </p>
+
+              {inspirationAnalysis.hasEnoughData ? (
+                <div className="inspiration-analysis-panel">
+                  <h3>Análise automática das inspirações</h3>
+                  <div className="history-results-grid">
+                    <article className="metric-card">
+                      <span>Plataforma que mais aparece</span>
+                      <strong>{inspirationAnalysis.topPlatform}</strong>
+                    </article>
+                    <article className="metric-card">
+                      <span>Tipo de conteúdo mais usado</span>
+                      <strong>{inspirationAnalysis.topContentType}</strong>
+                    </article>
+                    <article className="metric-card">
+                      <span>Elemento visual mais repetido</span>
+                      <strong>{inspirationAnalysis.topVisualElement}</strong>
+                    </article>
+                    <article className="metric-card">
+                      <span>Inspiração com maior visualizações</span>
+                      <strong>
+                        {inspirationAnalysis.inspirationWithMostViews
+                          ? `${inspirationAnalysis.inspirationWithMostViews.platform} • ${
+                              inspirationAnalysis.inspirationWithMostViews.metrics?.views || 0
+                            } views`
+                          : "Sem dados"}
+                      </strong>
+                    </article>
+                    <article className="metric-card">
+                      <span>Inspiração com maior salvamentos</span>
+                      <strong>
+                        {inspirationAnalysis.inspirationWithMostSaves
+                          ? `${inspirationAnalysis.inspirationWithMostSaves.platform} • ${
+                              inspirationAnalysis.inspirationWithMostSaves.metrics?.saves || 0
+                            } salvamentos`
+                          : "Sem dados"}
+                      </strong>
+                    </article>
+                  </div>
+                  <div className="recommendation-list">
+                    <p>• Melhor ideia para adaptar hoje: {inspirationAnalysis.bestIdeaForToday}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="empty-state">Salve pelo menos 2 inspirações para ver padrões criativos.</p>
+              )}
 
               {inspirations.length ? (
                 <div className="favorites-grid">
@@ -3484,10 +3851,21 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
                         {inspiration.metrics.saves} salvamentos
                       </p>
                       <p>Por que funcionou: {inspiration.whyWorked || "não informado"}</p>
-                      <p>Adaptação: {inspiration.adaptationIdea || "não informada"}</p>
+                      <p>Ideia para Sabor Latino: {inspiration.adaptationIdea || "não informada"}</p>
                       <div className="grid-two">
+                        <button
+                          className="secondary-btn"
+                          disabled={inspirationAdaptationLoading}
+                          onClick={() => adaptSavedInspiration(inspiration)}
+                          type="button"
+                        >
+                          Adaptar
+                        </button>
                         <button className="secondary-btn" onClick={() => useInspirationInGenerator(inspiration)} type="button">
-                          Usar no gerador
+                          Usar no gerador de imagem
+                        </button>
+                        <button className="secondary-btn" onClick={() => copyInspirationIdea(inspiration)} type="button">
+                          {copiedKey === `inspiration_copy_${inspiration.id}` ? "Copiado!" : "Copiar ideia"}
                         </button>
                         <button className="secondary-btn" onClick={() => deleteInspiration(inspiration.id)} type="button">
                           Excluir
@@ -3499,6 +3877,35 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
               ) : (
                 <p className="empty-state">Nenhuma inspiração salva ainda.</p>
               )}
+
+              {inspirationAdaptation ? (
+                <div className="inspiration-adaptation-panel">
+                  <h3>Adaptação original para Sabor Latino</h3>
+                  <div className="grid-two">
+                    <button className="secondary-btn" onClick={copyAllInspirationAdaptationTexts} type="button">
+                      {copiedKey === "all_inspiration_adaptation" ? "Tudo copiado!" : "Copiar adaptação completa"}
+                    </button>
+                    <button className="whatsapp-btn" onClick={openWhatsAppWithInspirationAdaptation} type="button">
+                      Enviar no WhatsApp
+                    </button>
+                  </div>
+                  <div className="outputs-grid">
+                    {inspirationAdaptationOutputFields.map((field) => (
+                      <article className="output-card" key={field.key}>
+                        <h3>{field.title}</h3>
+                        <p>{inspirationAdaptation[field.key]}</p>
+                        <button
+                          className="secondary-btn"
+                          onClick={() => copyText(`inspiration_adapt_${field.key}`, inspirationAdaptation[field.key])}
+                          type="button"
+                        >
+                          {copiedKey === `inspiration_adapt_${field.key}` ? "Copiado!" : "Copiar"}
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="subcard">

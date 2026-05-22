@@ -20,10 +20,12 @@ Aplicação web em React para criar campanhas e promoções rápidas do restaura
 
 ## Geração com IA (segura via Netlify Functions)
 
-A **Campanha Inteligente** usa backend serverless para proteger a chave da OpenAI.
+A **Campanha Inteligente** e o módulo **Inspirações & Imagens** usam backend serverless para proteger a chave da OpenAI.
 
 - Função: `netlify/functions/generate-campaign.js`
 - Endpoint no frontend: `POST /.netlify/functions/generate-campaign`
+- Função: `netlify/functions/adapt-inspiration.js`
+- Endpoint no frontend: `POST /.netlify/functions/adapt-inspiration`
 - Modelo usado: `gpt-4o-mini`
 - Prompt de sistema fixo no backend (não exposto no React)
 
@@ -65,6 +67,15 @@ Arquivo de referência local:
 3. A function gera os textos com OpenAI no backend.
 4. O frontend exibe o conteúdo retornado.
 5. Se houver falha de IA, a app mostra mensagem amigável e ativa o gerador local automaticamente.
+
+---
+
+## Fluxo de Inspirações com IA
+
+1. Usuário salva inspiração manual com dados de link, plataforma, tipo e métricas.
+2. Ao tocar em **✨ Adaptar para Sabor Latino**, o frontend envia os dados para `/.netlify/functions/adapt-inspiration`.
+3. A function retorna JSON com adaptação original (gancho, texto da plataforma, WhatsApp, prompt de imagem, roteiro, hashtags e CTA).
+4. Se a IA falhar, a função e o frontend usam fallback local para manter a experiência fluida.
 
 ---
 
