@@ -30,13 +30,12 @@ const sections = [
   { id: "campanha_inteligente", label: "Campanha Inteligente" },
   { id: "ganchos_virais", label: "Ganchos Virais" },
   { id: "criador", label: "Criador" },
-  { id: "gerador", label: "Gerador" },
   { id: "campanha_dia", label: "Campanha do Dia" },
   { id: "instagram_oficial", label: "Instagram Manual" },
   { id: "insp_imagens", label: "Inspirações & Imagens" },
   { id: "historico", label: "Histórico" },
-  { id: "favoritas", label: "Favoritas" },
   { id: "rapidas", label: "Rápidas" },
+  { id: "favoritas", label: "Favoritas" },
   { id: "config", label: "Configurações" },
 ];
 
@@ -1411,7 +1410,7 @@ Chama no WhatsApp ${whatsapp} e peça o seu.`
       }),
       ...current,
     ]);
-    setActiveSection("gerador");
+    setActiveSection("criador");
   };
 
   const generateImageNow = (payload = imageBuilder) => {
@@ -3491,7 +3490,7 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
         {activeSection === "criador" ? (
           <section className="card">
             <h2>Criador de promoções</h2>
-            <p className="muted">Escolha o que vender e o estilo da mensagem.</p>
+            <p className="muted">Escolha o que vender, gere os textos e copie tudo em um único lugar.</p>
 
             <div className="form-grid">
               <label>
@@ -3528,14 +3527,6 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
             <button className="primary-btn full-width" onClick={() => generateNow(builder)} type="button">
               Gerar textos promocionais
             </button>
-          </section>
-        ) : null}
-
-        {activeSection === "gerador" ? (
-          <section className="card">
-            <h2>Gerador de textos</h2>
-            <p className="muted">Copie e publique rápido em cada canal.</p>
-
             {generated ? (
               <>
                 <div className="meta-chip-row">
@@ -3579,7 +3570,7 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
                 </div>
               </>
             ) : (
-              <p className="empty-state">Escolha as opções no Criador e toque em "Gerar textos promocionais".</p>
+              <p className="empty-state">Escolha as opções e toque em "Gerar textos promocionais".</p>
             )}
           </section>
         ) : null}
