@@ -821,6 +821,7 @@ function App() {
   const [instagramGenerated, setInstagramGenerated] = usePersistentState("promocoes.instagramOfficial.generated", null);
   const [generatedImageHistory, setGeneratedImageHistory] = usePersistentState("promocoes.imagens.recentes", []);
   const [imageGenerationByModule, setImageGenerationByModule] = useState({});
+  const [logoLoadError, setLogoLoadError] = useState(false);
 
   const [inspirationForm, setInspirationForm] = useState(defaultInspirationForm);
   const [instagramManualForm, setInstagramManualForm] = useState(defaultInstagramManualForm);
@@ -3657,8 +3658,25 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
   return (
     <div className="app-shell">
       <header className="hero">
-        <h1>Promoções Sabor Latino</h1>
-        <p>Ferramenta rápida para criar campanhas diárias e vender mais.</p>
+        <div className="hero-head">
+          <div className="hero-logo-shell" role="img" aria-label="Logo do Sabor Latino">
+            {logoLoadError ? (
+              <span className="hero-logo-fallback">SL</span>
+            ) : (
+              <img
+                alt="Logo do Sabor Latino"
+                className="hero-logo-img"
+                onError={() => setLogoLoadError(true)}
+                src="/logo-sabor-latino.png"
+              />
+            )}
+          </div>
+          <div className="hero-text">
+            <h1>Promoções Sabor Latino</h1>
+            <p className="hero-subtitle">Ferramenta rápida para criar campanhas diárias e vender mais.</p>
+            <p className="hero-location">Nova Bassano • RS</p>
+          </div>
+        </div>
       </header>
 
       <nav className="tab-row">

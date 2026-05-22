@@ -52,14 +52,59 @@ p {
   box-shadow: var(--shadow);
 }
 
+.hero-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.hero-logo-shell {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 2px solid #f2c79b;
+  background: #fff3e3;
+  box-shadow: 0 2px 10px rgba(151, 78, 34, 0.14);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.hero-logo-fallback {
+  color: #9d4d1f;
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+}
+
+.hero-text {
+  min-width: 0;
+}
+
 .hero h1 {
   font-size: clamp(1.5rem, 4vw, 2rem);
 }
 
-.hero p {
+.hero-subtitle {
   margin-top: 0.25rem;
   color: #714f3a;
   font-weight: 600;
+}
+
+.hero-location {
+  margin-top: 0.18rem;
+  color: #8a674e;
+  font-weight: 700;
+  font-size: 0.82rem;
 }
 
 .tab-row {
@@ -788,5 +833,12 @@ textarea {
   .secondary-btn,
   .whatsapp-btn {
     width: 100%;
+  }
+}
+
+@media (min-width: 761px) {
+  .hero-logo-shell {
+    width: 56px;
+    height: 56px;
   }
 }
