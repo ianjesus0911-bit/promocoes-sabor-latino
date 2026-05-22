@@ -345,6 +345,7 @@ const imageOutputFields = [
 ];
 
 const IMAGE_HISTORY_LIMIT = 10;
+const IMAGE_BASE64_HISTORY_LIMIT = 3;
 const IMAGE_LINK_EXPIRATION_MS = 60 * 60 * 1000;
 const IMAGE_GENERATION_ERROR_MESSAGE =
   "Não foi possível gerar a imagem agora. Tente novamente ou use o prompt no Canva, ChatGPT ou Leonardo.";
@@ -398,12 +399,17 @@ const summarizePrompt = (prompt, maxLength = 120) => {
   return `${text.slice(0, maxLength).trim()}...`;
 };
 
+const isDataImageUrl = (value) => String(value || "").trim().startsWith("data:image");
+
 const toIsoDatePlusOneHour = () => {
   const now = new Date();
   return new Date(now.getTime() + IMAGE_LINK_EXPIRATION_MS).toISOString();
 };
 
-const getImageStatusByExpiration = (expiresAt) => {
+const getImageStatusByExpiration = (item) => {
+  const imageUrl = typeof item === "object" ? String(item?.image_url || item?.imageUrl || "").trim() : "";
+  if (isDataImageUrl(imageUrl)) return "ativa";
+  const expiresAt = typeof item === "object" ? item?.expiresAt : item;
   const date = new Date(String(expiresAt || ""));
   if (Number.isNaN(date.getTime())) return "expirada";
   return date.getTime() > Date.now() ? "ativa" : "expirada";
@@ -911,7 +917,7 @@ function App() {
       if (!Array.isArray(current) || !current.length) return current;
       let changed = false;
       const updated = current.map((item) => {
-        const computedStatus = getImageStatusByExpiration(item?.expiresAt);
+        const computedStatus = getImageStatusByExpiration(item);
         if (computedStatus !== item?.status) {
           changed = true;
           return { ...item, status: computedStatus };
@@ -926,7 +932,7 @@ function App() {
         if (!Array.isArray(current) || !current.length) return current;
         let changed = false;
         const updated = current.map((item) => {
-          const computedStatus = getImageStatusByExpiration(item?.expiresAt);
+          const computedStatus = getImageStatusByExpiration(item);
           if (computedStatus !== item?.status) {
             changed = true;
             return { ...item, status: computedStatus };
@@ -2694,6 +2700,7 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
         ...(current[moduleId] || {}),
         loading: true,
         error: "",
+        technicalError: null,
         result: null,
         promptUsed: promptWithContext,
         requestPayload,
@@ -2719,29 +2726,53 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
 
       const apiPayload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        if (response.status === 504 || apiPayload?.error_type === "timeout_openai") {
+        if (response.status === 504) {
           throw new Error("__IMAGE_TIMEOUT__");
         }
-        throw new Error(typeof apiPayload?.error === "string" ? apiPayload.error : IMAGE_GENERATION_ERROR_MESSAGE);
+        const technicalError = {
+          status: Number(apiPayload?.status || response.status) || response.status,
+          message: String(apiPayload?.message || apiPayload?.error || IMAGE_GENERATION_ERROR_MESSAGE),
+          details: String(apiPayload?.details || apiPayload?.detalhe_tecnico || "Sem detalhe técnico disponível."),
+          modelUsed: String(
+            apiPayload?.model_used ||
+              (Array.isArray(apiPayload?.model_attempts) ? apiPayload.model_attempts.join(" -> ") : "não informado")
+          ),
+        };
+        throw { type: "api_error", technicalError };
       }
 
       const imageUrl = String(apiPayload?.image_url || "").trim();
       if (!imageUrl) {
-        throw new Error("A função retornou sem URL de imagem.");
+        throw {
+          type: "api_error",
+          technicalError: {
+            status: response.status,
+            message: "A função retornou sem URL de imagem.",
+            details: String(apiPayload?.details || apiPayload?.detalhe_tecnico || "Resposta sem image_url."),
+            modelUsed: String(apiPayload?.model_used || "não informado"),
+          },
+        };
       }
 
-      const expiresAt = toIsoDatePlusOneHour();
+      const modelUsed = String(apiPayload?.model_used || "não informado");
+      const imageBase64 = String(apiPayload?.image_base64 || "").trim();
+      const isDataUrl = isDataImageUrl(imageUrl);
+      const expiresIn = isDataUrl ? null : apiPayload?.expires_in ?? "1 hora";
+      const expiresAt = !isDataUrl && expiresIn ? toIsoDatePlusOneHour() : null;
       const generationResult = {
         id: `img-${Date.now()}`,
         imageUrl,
+        imageBase64,
+        isDataUrl,
         promptUsed: promptWithContext,
         generatedAt: new Date().toISOString(),
         generatedAtLabel: new Date().toLocaleString("pt-BR"),
         moduleId,
         moduleLabel,
+        modelUsed,
         format,
         size,
-        expiresIn: String(apiPayload?.expires_in || "1 hora"),
+        expiresIn,
         expiresAt,
         status: "ativa",
         caption: safeCaption,
@@ -2758,6 +2789,7 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
           ...(current[moduleId] || {}),
           loading: false,
           error: "",
+          technicalError: null,
           result: generationResult,
           promptUsed: promptWithContext,
           requestPayload,
@@ -2766,10 +2798,11 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
 
       setGeneratedImageHistory((current) => {
         const list = Array.isArray(current) ? current : [];
-        const next = [
+        const withNew = [
           {
             id: generationResult.id,
             image_url: generationResult.imageUrl,
+            image_base64: generationResult.imageBase64 || "",
             prompt_used: generationResult.promptUsed,
             prompt_usado: generationResult.promptUsed,
             generatedAt: generationResult.generatedAt,
@@ -2777,15 +2810,25 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
             data_hora: generationResult.generatedAtLabel,
             module: generationResult.moduleLabel,
             moduleId: generationResult.moduleId,
+            model_used: generationResult.modelUsed,
             status: generationResult.status,
             expiresAt: generationResult.expiresAt,
           },
           ...list,
-        ].slice(0, IMAGE_HISTORY_LIMIT);
-        return next;
+        ];
+
+        let base64Count = 0;
+        const filteredByBase64Limit = withNew.filter((item) => {
+          if (!isDataImageUrl(item?.image_url)) return true;
+          base64Count += 1;
+          return base64Count <= IMAGE_BASE64_HISTORY_LIMIT;
+        });
+
+        return filteredByBase64Limit.slice(0, IMAGE_HISTORY_LIMIT);
       });
     } catch (error) {
       console.error("Erro ao gerar imagem real:", error);
+      const technicalError = error?.type === "api_error" ? error.technicalError || null : null;
       const isTimeoutError =
         String(error instanceof Error ? error.message : "").includes("__IMAGE_TIMEOUT__") ||
         String(error instanceof Error ? error.message : "").toLowerCase().includes("abort");
@@ -2795,6 +2838,7 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
           ...(current[moduleId] || {}),
           loading: false,
           error: isTimeoutError ? IMAGE_TIMEOUT_ERROR_MESSAGE : IMAGE_GENERATION_ERROR_MESSAGE,
+          technicalError,
           result: null,
           promptUsed: promptWithContext,
           requestPayload,
@@ -2842,6 +2886,7 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
   }) => {
     const moduleState = imageGenerationByModule[moduleId] || {};
     const result = moduleState.result;
+    const technicalError = moduleState.technicalError;
 
     return (
       <div className="image-generator-panel">
@@ -2869,14 +2914,30 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
 
         {moduleState.loading ? (
           <div className="image-loading-state">
-            <p className="hint">Gerando sua imagem...</p>
-            <p className="hint">A geração pode levar até 25 segundos. Aguarde sem fechar a tela.</p>
+            <p className="hint">Gerando sua imagem... Isso pode levar até 25 segundos.</p>
           </div>
         ) : null}
 
         {moduleState.error ? (
           <div className="image-error-state">
             <p className="input-error">{moduleState.error}</p>
+            {technicalError ? (
+              <div className="technical-error-box">
+                <strong>Detalhe técnico</strong>
+                <p>
+                  <strong>status:</strong> {technicalError.status || "não informado"}
+                </p>
+                <p>
+                  <strong>message:</strong> {technicalError.message || "não informado"}
+                </p>
+                <p>
+                  <strong>details:</strong> {technicalError.details || "não informado"}
+                </p>
+                <p>
+                  <strong>model_used:</strong> {technicalError.modelUsed || "não informado"}
+                </p>
+              </div>
+            ) : null}
             <p className="hint">Prompt para uso manual:</p>
             <p className="image-prompt-preview">{moduleState.promptUsed || String(basePrompt || "").trim()}</p>
             <button
@@ -2891,7 +2952,10 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
 
         {result ? (
           <div className="image-result-panel">
-            <p className="hint">Baixe a imagem agora. O link expira em 1 hora.</p>
+            <p className="hint">
+              {result.isDataUrl ? "Baixe a imagem para guardar no seu dispositivo." : "Baixe a imagem agora. O link expira em 1 hora."}
+            </p>
+            <p className="hint">Modelo usado: {result.modelUsed || "não informado"}</p>
             {result.showFeedNotice ? <p className="hint">{FEED_VERTICAL_NOTICE}</p> : null}
             <img alt={`Imagem gerada - ${moduleLabel}`} className="generated-image-preview" src={result.imageUrl} />
 
@@ -5152,11 +5216,11 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
 
             <div className="subcard">
               <h3>Imagens geradas recentemente</h3>
-              <p className="hint">Baixe a imagem agora. O link expira em 1 hora.</p>
+              <p className="hint">Imagens em base64 ficam disponíveis localmente. Links temporários podem expirar.</p>
               {recentGeneratedImages.length ? (
                 <div className="recent-images-grid">
                   {recentGeneratedImages.map((item) => {
-                    const status = getImageStatusByExpiration(item.expiresAt);
+                    const status = getImageStatusByExpiration(item);
                     const isActive = status === "ativa";
                     return (
                       <article className="recent-image-card" key={item.id}>
@@ -5172,6 +5236,7 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
                           <p className="input-error">Imagem expirada. Gere novamente.</p>
                         )}
                         <p className="hint">{item.generatedAtLabel || formatInstagramPostDate(item.generatedAt)}</p>
+                        <p className="hint">Modelo: {item.model_used || "não informado"}</p>
                         <p className="image-prompt-preview">{summarizePrompt(item.prompt_used)}</p>
                         <div className="grid-two">
                           {isActive ? (

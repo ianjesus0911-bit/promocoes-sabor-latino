@@ -636,6 +636,15 @@ textarea {
   padding: 0.6rem;
 }
 
+.technical-error-box {
+  border: 1px solid #f2c4b8;
+  border-radius: 10px;
+  background: #fff4f0;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
 .compact-output-grid {
   margin-top: 0.2rem;
 }
