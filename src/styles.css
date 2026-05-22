@@ -601,6 +601,75 @@ textarea {
   gap: 0.55rem;
 }
 
+.image-generator-panel {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.image-loading-state,
+.image-error-state,
+.image-result-panel {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.generated-image-preview {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #f0d4b8;
+  background: #fff8ef;
+  object-fit: cover;
+}
+
+.image-prompt-preview {
+  white-space: pre-wrap;
+  color: #5b4333;
+  font-size: 0.86rem;
+  border: 1px dashed #eec9a2;
+  border-radius: 10px;
+  background: #fffaf3;
+  padding: 0.6rem;
+}
+
+.compact-output-grid {
+  margin-top: 0.2rem;
+}
+
+.recent-images-grid {
+  margin-top: 0.65rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.recent-image-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.recent-image-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.recent-image-thumb {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #f0d7bc;
+  background: #fff7ef;
+  object-fit: cover;
+}
+
 .week-day-select-label {
   margin-top: 0.5rem;
   display: flex;

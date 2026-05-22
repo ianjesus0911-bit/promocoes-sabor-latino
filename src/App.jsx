@@ -344,6 +344,69 @@ const imageOutputFields = [
   { key: "videoIdea", title: "Ideia de vídeo curto de 8 segundos" },
 ];
 
+const IMAGE_HISTORY_LIMIT = 10;
+const IMAGE_LINK_EXPIRATION_MS = 60 * 60 * 1000;
+const IMAGE_GENERATION_ERROR_MESSAGE =
+  "Não foi possível gerar a imagem agora. Tente novamente ou use o prompt no Canva, ChatGPT ou Leonardo.";
+const IMAGE_COST_NOTE = "Cada imagem gerada tem um custo aproximado de $0.04. Use com intenção.";
+const FEED_VERTICAL_NOTICE =
+  "A imagem foi gerada em formato vertical próximo ao 4:5. Se quiser ajuste exato, recorte no Canva.";
+
+const sizeByFormat = {
+  "Instagram Story 9:16": "1024x1792",
+  "WhatsApp Status": "1024x1792",
+  TikTok: "1024x1792",
+  "Facebook Post": "1792x1024",
+  Quadrado: "1024x1024",
+  "Instagram Feed 4:5": "1024x1792",
+  "Banner horizontal": "1792x1024",
+};
+
+const normalizeImageFormatSize = (format) => {
+  const cleanFormat = String(format || "").trim();
+  return sizeByFormat[cleanFormat] || "1024x1024";
+};
+
+const isFeedLikeFormat = (format) => String(format || "").trim() === "Instagram Feed 4:5";
+
+const imageFormatFromChannel = (channel) => {
+  const cleanChannel = String(channel || "").trim();
+  if (cleanChannel === "Instagram Story") return "Instagram Story 9:16";
+  if (cleanChannel === "Instagram Feed") return "Instagram Feed 4:5";
+  if (cleanChannel === "Facebook") return "Facebook Post";
+  if (cleanChannel === "TikTok") return "TikTok";
+  if (cleanChannel === "WhatsApp") return "WhatsApp Status";
+  return "Quadrado";
+};
+
+const imageFormatFromRecommendation = (recommendationText) => {
+  const text = String(recommendationText || "").toLowerCase();
+  if (text.includes("story")) return "Instagram Story 9:16";
+  if (text.includes("feed")) return "Instagram Feed 4:5";
+  if (text.includes("facebook")) return "Facebook Post";
+  if (text.includes("tiktok")) return "TikTok";
+  if (text.includes("status")) return "WhatsApp Status";
+  if (text.includes("horizontal")) return "Banner horizontal";
+  return "Quadrado";
+};
+
+const summarizePrompt = (prompt, maxLength = 120) => {
+  const text = String(prompt || "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength).trim()}...`;
+};
+
+const toIsoDatePlusOneHour = () => {
+  const now = new Date();
+  return new Date(now.getTime() + IMAGE_LINK_EXPIRATION_MS).toISOString();
+};
+
+const getImageStatusByExpiration = (expiresAt) => {
+  const date = new Date(String(expiresAt || ""));
+  if (Number.isNaN(date.getTime())) return "expirada";
+  return date.getTime() > Date.now() ? "ativa" : "expirada";
+};
+
 const inspirationAdaptationOutputFields = [
   { key: "gancho", title: "Gancho (2 segundos)" },
   { key: "texto_plataforma", title: "Texto para plataforma" },
@@ -748,6 +811,8 @@ function App() {
   );
   const [instagramPosts, setInstagramPosts] = usePersistentState("promocoes.instagramOfficial.posts", defaultInstagramPosts);
   const [instagramGenerated, setInstagramGenerated] = usePersistentState("promocoes.instagramOfficial.generated", null);
+  const [generatedImageHistory, setGeneratedImageHistory] = usePersistentState("promocoes.imagens.recentes", []);
+  const [imageGenerationByModule, setImageGenerationByModule] = useState({});
 
   const [inspirationForm, setInspirationForm] = useState(defaultInspirationForm);
   const [instagramManualForm, setInstagramManualForm] = useState(defaultInstagramManualForm);
@@ -839,6 +904,40 @@ function App() {
     setSelectedGeneratedHook(viralHooksGenerated.hooks[0]);
   }, [viralHooksGenerated, selectedGeneratedHook, selectedHookForCampaign]);
 
+  useEffect(() => {
+    setGeneratedImageHistory((current) => {
+      if (!Array.isArray(current) || !current.length) return current;
+      let changed = false;
+      const updated = current.map((item) => {
+        const computedStatus = getImageStatusByExpiration(item?.expiresAt);
+        if (computedStatus !== item?.status) {
+          changed = true;
+          return { ...item, status: computedStatus };
+        }
+        return item;
+      });
+      return changed ? updated : current;
+    });
+
+    const intervalId = window.setInterval(() => {
+      setGeneratedImageHistory((current) => {
+        if (!Array.isArray(current) || !current.length) return current;
+        let changed = false;
+        const updated = current.map((item) => {
+          const computedStatus = getImageStatusByExpiration(item?.expiresAt);
+          if (computedStatus !== item?.status) {
+            changed = true;
+            return { ...item, status: computedStatus };
+          }
+          return item;
+        });
+        return changed ? updated : current;
+      });
+    }, 60000);
+
+    return () => window.clearInterval(intervalId);
+  }, [setGeneratedImageHistory]);
+
   const parseInstagramPostDate = (value) => {
     const parsed = new Date(String(value || "").replace(" ", "T"));
     if (Number.isNaN(parsed.getTime())) return null;
@@ -914,6 +1013,27 @@ function App() {
       bestIdeaForToday,
     };
   }, [inspirations]);
+
+  const viralHooksImagePrompt = useMemo(() => {
+    if (!viralHooksGenerated) return "";
+    const hook = String(selectedGeneratedHook || viralHooksGenerated.hooks?.[0] || "").trim();
+    const product = String(viralHooksBuilder.product || "comida cubana");
+    const style = String(viralHooksBuilder.hookStyle || "Curiosidade");
+    const channel = String(viralHooksBuilder.channel || "TikTok");
+    return `Crie imagem promocional original para Sabor Latino em Nova Bassano, RS.
+Produto em destaque: ${product}.
+Gancho principal para apoiar o vídeo: ${hook || "mostrar prato quente saindo agora"}.
+Estilo do gancho: ${style}. Canal principal: ${channel}.
+Visual realista, comida latina/cubana quente com vapor, cores quentes, composição para redes sociais, sem copiar conteúdos de terceiros.`;
+  }, [selectedGeneratedHook, viralHooksBuilder.channel, viralHooksBuilder.hookStyle, viralHooksBuilder.product, viralHooksGenerated]);
+
+  const recentGeneratedImages = useMemo(() => {
+    if (!Array.isArray(generatedImageHistory)) return [];
+    return generatedImageHistory
+      .slice()
+      .sort((a, b) => new Date(String(b.generatedAt || "")).getTime() - new Date(String(a.generatedAt || "")).getTime())
+      .slice(0, IMAGE_HISTORY_LIMIT);
+  }, [generatedImageHistory]);
 
   const instagramPostsList = useMemo(() => {
     if (!Array.isArray(instagramPosts)) return [];
@@ -2484,6 +2604,332 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
     window.open(buildWhatsAppLink(settings.whatsappNumber, message), "_blank", "noreferrer");
   };
 
+  const buildPromptWithCreativeContext = ({ basePrompt, inspiration }) => {
+    const promptBase = String(basePrompt || "").trim();
+    if (!promptBase) return "";
+
+    const promptParts = [promptBase];
+    const savedHook = String(selectedHookForCampaign || "").trim();
+
+    if (savedHook) {
+      promptParts.push(
+        `Contexto criativo adicional: use este gancho como apoio visual para a arte/vídeo: "${savedHook}".`
+      );
+    }
+
+    if (inspiration) {
+      promptParts.push(
+        `Referência estratégica (não copiar): ${inspiration.platform || "Instagram"} • ${
+          inspiration.contentType || "Reel"
+        } • ${inspiration.visualElement || "close-up"}. Use apenas estrutura visual e ritmo, mantendo imagem 100% original para Sabor Latino.`
+      );
+    }
+
+    return promptParts.join("\n\n");
+  };
+
+  const buildWhatsAppMessageFromImageContext = ({ caption, storyText, hashtags, ctaWhatsapp }) => {
+    return [caption, storyText, hashtags, ctaWhatsapp].filter(Boolean).join("\n\n");
+  };
+
+  const generateRealImageForModule = async ({
+    moduleId,
+    moduleLabel,
+    basePrompt,
+    format,
+    caption,
+    storyText,
+    hashtags,
+    ctaWhatsapp,
+    inspiration,
+  }) => {
+    const promptWithContext = buildPromptWithCreativeContext({ basePrompt, inspiration });
+    if (!promptWithContext) {
+      setImageGenerationByModule((current) => ({
+        ...current,
+        [moduleId]: {
+          ...(current[moduleId] || {}),
+          loading: false,
+          error: "Informe ou gere um prompt antes de criar a imagem.",
+          promptUsed: "",
+        },
+      }));
+      return;
+    }
+
+    const size = normalizeImageFormatSize(format);
+    const safeCaption = String(caption || "").trim();
+    const safeStory = String(storyText || "").trim();
+    const safeHashtags = String(hashtags || "").trim();
+    const safeCta = String(ctaWhatsapp || "").trim() || `Chame no WhatsApp ${settings.whatsappNumber}.`;
+    const whatsappMessage = buildWhatsAppMessageFromImageContext({
+      caption: safeCaption,
+      storyText: safeStory,
+      hashtags: safeHashtags,
+      ctaWhatsapp: safeCta,
+    });
+    const showFeedNotice = isFeedLikeFormat(format);
+
+    const requestPayload = {
+      moduleId,
+      moduleLabel,
+      basePrompt,
+      format,
+      size,
+      caption: safeCaption,
+      storyText: safeStory,
+      hashtags: safeHashtags,
+      ctaWhatsapp: safeCta,
+      promptUsed: promptWithContext,
+      showFeedNotice,
+      inspiration: inspiration || null,
+      whatsappMessage,
+    };
+
+    setImageGenerationByModule((current) => ({
+      ...current,
+      [moduleId]: {
+        ...(current[moduleId] || {}),
+        loading: true,
+        error: "",
+        result: null,
+        promptUsed: promptWithContext,
+        requestPayload,
+      },
+    }));
+
+    let timeoutId;
+    try {
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 65000);
+
+      const response = await fetch("/.netlify/functions/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          prompt: promptWithContext,
+          quality: "standard",
+          size,
+          module: moduleId,
+        }),
+      });
+
+      const apiPayload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof apiPayload?.error === "string" ? apiPayload.error : IMAGE_GENERATION_ERROR_MESSAGE);
+      }
+
+      const imageUrl = String(apiPayload?.image_url || "").trim();
+      if (!imageUrl) {
+        throw new Error("A função retornou sem URL de imagem.");
+      }
+
+      const expiresAt = toIsoDatePlusOneHour();
+      const generationResult = {
+        id: `img-${Date.now()}`,
+        imageUrl,
+        promptUsed: promptWithContext,
+        generatedAt: new Date().toISOString(),
+        generatedAtLabel: new Date().toLocaleString("pt-BR"),
+        moduleId,
+        moduleLabel,
+        format,
+        size,
+        expiresIn: String(apiPayload?.expires_in || "1 hora"),
+        expiresAt,
+        status: "ativa",
+        caption: safeCaption,
+        storyText: safeStory,
+        hashtags: safeHashtags,
+        ctaWhatsapp: safeCta,
+        whatsappMessage,
+        showFeedNotice,
+      };
+
+      setImageGenerationByModule((current) => ({
+        ...current,
+        [moduleId]: {
+          ...(current[moduleId] || {}),
+          loading: false,
+          error: "",
+          result: generationResult,
+          promptUsed: promptWithContext,
+          requestPayload,
+        },
+      }));
+
+      setGeneratedImageHistory((current) => {
+        const list = Array.isArray(current) ? current : [];
+        const next = [
+          {
+            id: generationResult.id,
+            image_url: generationResult.imageUrl,
+            prompt_used: generationResult.promptUsed,
+            prompt_usado: generationResult.promptUsed,
+            generatedAt: generationResult.generatedAt,
+            generatedAtLabel: generationResult.generatedAtLabel,
+            data_hora: generationResult.generatedAtLabel,
+            module: generationResult.moduleLabel,
+            moduleId: generationResult.moduleId,
+            status: generationResult.status,
+            expiresAt: generationResult.expiresAt,
+          },
+          ...list,
+        ].slice(0, IMAGE_HISTORY_LIMIT);
+        return next;
+      });
+    } catch (error) {
+      console.error("Erro ao gerar imagem real:", error);
+      setImageGenerationByModule((current) => ({
+        ...current,
+        [moduleId]: {
+          ...(current[moduleId] || {}),
+          loading: false,
+          error: IMAGE_GENERATION_ERROR_MESSAGE,
+          result: null,
+          promptUsed: promptWithContext,
+          requestPayload,
+        },
+      }));
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  };
+
+  const regenerateImageVersion = (moduleId) => {
+    const moduleState = imageGenerationByModule[moduleId];
+    const payload = moduleState?.requestPayload;
+    if (!payload) return;
+    generateRealImageForModule({
+      moduleId: payload.moduleId,
+      moduleLabel: payload.moduleLabel,
+      basePrompt: payload.basePrompt,
+      format: payload.format,
+      caption: payload.caption,
+      storyText: payload.storyText,
+      hashtags: payload.hashtags,
+      ctaWhatsapp: payload.ctaWhatsapp,
+      inspiration: payload.inspiration,
+    });
+  };
+
+  const openWhatsAppFromImageModule = (moduleId) => {
+    const moduleState = imageGenerationByModule[moduleId];
+    const message = String(moduleState?.result?.whatsappMessage || "").trim();
+    if (!message) return;
+    window.open(buildWhatsAppLink(settings.whatsappNumber, message), "_blank", "noreferrer");
+  };
+
+  const renderImageGenerationPanel = ({
+    moduleId,
+    moduleLabel,
+    basePrompt,
+    format,
+    caption,
+    storyText,
+    hashtags,
+    ctaWhatsapp,
+    inspiration,
+  }) => {
+    const moduleState = imageGenerationByModule[moduleId] || {};
+    const result = moduleState.result;
+
+    return (
+      <div className="image-generator-panel">
+        <button
+          className="primary-btn full-width"
+          disabled={moduleState.loading}
+          onClick={() =>
+            generateRealImageForModule({
+              moduleId,
+              moduleLabel,
+              basePrompt,
+              format,
+              caption,
+              storyText,
+              hashtags,
+              ctaWhatsapp,
+              inspiration,
+            })
+          }
+          type="button"
+        >
+          {moduleState.loading ? "Gerando sua imagem..." : "🎨 Gerar imagem"}
+        </button>
+        <p className="hint">{IMAGE_COST_NOTE}</p>
+
+        {moduleState.loading ? (
+          <div className="image-loading-state">
+            <p className="hint">Gerando sua imagem...</p>
+            <p className="hint">Isso leva cerca de 10 a 20 segundos...</p>
+          </div>
+        ) : null}
+
+        {moduleState.error ? (
+          <div className="image-error-state">
+            <p className="input-error">{moduleState.error}</p>
+            <p className="hint">Prompt para uso manual:</p>
+            <p className="image-prompt-preview">{moduleState.promptUsed || String(basePrompt || "").trim()}</p>
+            <button
+              className="secondary-btn"
+              onClick={() => copyText(`image_prompt_manual_${moduleId}`, moduleState.promptUsed || String(basePrompt || "").trim())}
+              type="button"
+            >
+              {copiedKey === `image_prompt_manual_${moduleId}` ? "Copiado!" : "📋 Copiar prompt"}
+            </button>
+          </div>
+        ) : null}
+
+        {result ? (
+          <div className="image-result-panel">
+            <p className="hint">Baixe a imagem agora. O link expira em 1 hora.</p>
+            {result.showFeedNotice ? <p className="hint">{FEED_VERTICAL_NOTICE}</p> : null}
+            <img alt={`Imagem gerada - ${moduleLabel}`} className="generated-image-preview" src={result.imageUrl} />
+
+            <div className="smart-actions-grid">
+              <a className="secondary-btn" href={result.imageUrl} rel="noreferrer" target="_blank">
+                ⬇️ Baixar imagem
+              </a>
+              <button
+                className="secondary-btn"
+                onClick={() => copyText(`image_prompt_${moduleId}`, result.promptUsed)}
+                type="button"
+              >
+                {copiedKey === `image_prompt_${moduleId}` ? "Copiado!" : "📋 Copiar prompt"}
+              </button>
+              <button className="secondary-btn" onClick={() => regenerateImageVersion(moduleId)} type="button">
+                🔄 Gerar outra versão
+              </button>
+              <button className="whatsapp-btn" onClick={() => openWhatsAppFromImageModule(moduleId)} type="button">
+                📱 Abrir WhatsApp
+              </button>
+            </div>
+
+            <div className="outputs-grid compact-output-grid">
+              <article className="output-card">
+                <h3>Legenda sugerida</h3>
+                <p>{result.caption || "Use o texto principal da campanha."}</p>
+              </article>
+              <article className="output-card">
+                <h3>Texto para story</h3>
+                <p>{result.storyText || "Story curto com chamada para pedido."}</p>
+              </article>
+              <article className="output-card">
+                <h3>Hashtags</h3>
+                <p>{result.hashtags || "#SaborLatino #NovaBassano #PedidoNoWhatsApp"}</p>
+              </article>
+              <article className="output-card">
+                <h3>CTA para WhatsApp</h3>
+                <p>{result.ctaWhatsapp || `Chame no WhatsApp ${settings.whatsappNumber}.`}</p>
+              </article>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const saveGeneratedAsFavorite = () => {
     if (!generated) return;
 
@@ -3394,6 +3840,21 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
                     </article>
                   ))}
                 </div>
+
+                <div className="subcard">
+                  <h3>Imagem real da Campanha Inteligente</h3>
+                  {renderImageGenerationPanel({
+                    moduleId: "campanha-inteligente",
+                    moduleLabel: "Campanha Inteligente",
+                    basePrompt: intelligentCampaignGenerated.imagePrompt,
+                    format: imageFormatFromChannel(intelligentCampaignBuilder.mainChannel),
+                    caption: intelligentCampaignGenerated.instagramFeedCaption,
+                    storyText: intelligentCampaignGenerated.instagramStoryText,
+                    hashtags: intelligentCampaignGenerated.hashtags,
+                    ctaWhatsapp: intelligentCampaignGenerated.finalWhatsAppCTA,
+                    inspiration: null,
+                  })}
+                </div>
               </>
             ) : (
               <p className="empty-state">Defina os dados acima e toque em "Gerar campanha inteligente".</p>
@@ -3543,6 +4004,29 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
                     </button>
                   </article>
                 </div>
+
+                {viralHooksImagePrompt ? (
+                  <div className="subcard">
+                    <h3>Prompt de imagem baseado no gancho</h3>
+                    <p className="image-prompt-preview">{viralHooksImagePrompt}</p>
+                    <button className="secondary-btn" onClick={() => copyText("viral_image_prompt", viralHooksImagePrompt)} type="button">
+                      {copiedKey === "viral_image_prompt" ? "Copiado!" : "Copiar prompt"}
+                    </button>
+
+                    {renderImageGenerationPanel({
+                      moduleId: "ganchos-virais",
+                      moduleLabel: "Ganchos Virais",
+                      basePrompt: viralHooksImagePrompt,
+                      format: imageFormatFromChannel(viralHooksBuilder.channel),
+                      caption: selectedGeneratedHook || viralHooksGenerated.hooks?.[0] || "",
+                      storyText: selectedGeneratedHook || viralHooksGenerated.overlayTexts?.[0] || "",
+                      hashtags: "#SaborLatino #NovaBassano #ComidaCubana #PedidoNoWhatsApp",
+                      ctaWhatsapp:
+                        viralHooksGenerated.whatsappCalls?.[0] || `Chame no WhatsApp ${settings.whatsappNumber} e peça agora.`,
+                      inspiration: null,
+                    })}
+                  </div>
+                ) : null}
               </>
             ) : (
               <p className="empty-state">Escolha as opções e toque em "Gerar ganchos virais".</p>
@@ -3945,6 +4429,21 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
                       </button>
                     </article>
                   ))}
+                </div>
+
+                <div className="subcard">
+                  <h3>Imagem real da Campanha do Dia</h3>
+                  {renderImageGenerationPanel({
+                    moduleId: "campanha-dia",
+                    moduleLabel: "Campanha do Dia",
+                    basePrompt: campaignDayGenerated.imagePrompt,
+                    format: imageFormatFromRecommendation(campaignDayGenerated.recommendations?.bestFormat),
+                    caption: campaignDayGenerated.instagramFeedCaption,
+                    storyText: campaignDayGenerated.instagramStoryText,
+                    hashtags: campaignDayGenerated.hashtags,
+                    ctaWhatsapp: campaignDayGenerated.finalWhatsappCall,
+                    inspiration: null,
+                  })}
                 </div>
               </>
             ) : (
@@ -4622,9 +5121,74 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
                       </article>
                     ))}
                   </div>
+
+                  <div className="subcard">
+                    <h3>Gerar imagem real com IA</h3>
+                    {renderImageGenerationPanel({
+                      moduleId: "insp-imagens",
+                      moduleLabel: "Inspirações & Imagens",
+                      basePrompt: imageGenerated.fullPrompt,
+                      format: imageBuilder.format,
+                      caption: imageGenerated.captionIdea,
+                      storyText: imageGenerated.storyText,
+                      hashtags: imageGenerated.hashtags,
+                      ctaWhatsapp: `Chame no WhatsApp ${settings.whatsappNumber} e peça agora.`,
+                      inspiration: imageBuilder.useSavedInspiration === "sim" ? selectedInspiration : null,
+                    })}
+                  </div>
                 </>
               ) : (
                 <p className="empty-state">Escolha as opções e toque em "Gerar prompt profissional".</p>
+              )}
+            </div>
+
+            <div className="subcard">
+              <h3>Imagens geradas recentemente</h3>
+              <p className="hint">Baixe a imagem agora. O link expira em 1 hora.</p>
+              {recentGeneratedImages.length ? (
+                <div className="recent-images-grid">
+                  {recentGeneratedImages.map((item) => {
+                    const status = getImageStatusByExpiration(item.expiresAt);
+                    const isActive = status === "ativa";
+                    return (
+                      <article className="recent-image-card" key={item.id}>
+                        <div className="recent-image-head">
+                          <strong>{item.module || "Módulo"}</strong>
+                          <span className={`status-pill ${isActive ? "connected" : "error"}`}>
+                            {isActive ? "Ativa" : "Expirada"}
+                          </span>
+                        </div>
+                        {isActive ? (
+                          <img alt="Imagem gerada recente" className="recent-image-thumb" src={item.image_url} />
+                        ) : (
+                          <p className="input-error">Imagem expirada. Gere novamente.</p>
+                        )}
+                        <p className="hint">{item.generatedAtLabel || formatInstagramPostDate(item.generatedAt)}</p>
+                        <p className="image-prompt-preview">{summarizePrompt(item.prompt_used)}</p>
+                        <div className="grid-two">
+                          {isActive ? (
+                            <a className="secondary-btn" href={item.image_url} rel="noreferrer" target="_blank">
+                              Baixar
+                            </a>
+                          ) : (
+                            <button className="secondary-btn" disabled type="button">
+                              Baixar
+                            </button>
+                          )}
+                          <button
+                            className="secondary-btn"
+                            onClick={() => copyText(`recent_image_prompt_${item.id}`, item.prompt_used || "")}
+                            type="button"
+                          >
+                            {copiedKey === `recent_image_prompt_${item.id}` ? "Copiado!" : "Copiar prompt"}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="empty-state">Nenhuma imagem gerada ainda.</p>
               )}
             </div>
           </section>
