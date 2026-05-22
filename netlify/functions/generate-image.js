@@ -3,6 +3,7 @@ const DEFAULT_SIZE = "1024x1024";
 const DEFAULT_QUALITY = "standard";
 const DEFAULT_MODULE = "campanha-inteligente";
 const IMAGE_EXPIRES_IN = "1 hora";
+const OPENAI_TIMEOUT_MS = 25000;
 
 const PROMPT_COMPLEMENT = [
   "Foto profissional de comida, sem texto na imagem, sem marca d'água, sem logo, sem pessoas identificáveis, iluminação natural quente, estilo editorial gastronômico, cores vibrantes e apetitosas.",
@@ -87,49 +88,57 @@ export default async function handler(request) {
 
   const openAiKey = process.env.OPENAI_API_KEY;
   if (!openAiKey) {
-    return jsonResponse(
-      {
-        error: "OPENAI_API_KEY não configurada na Netlify.",
-      },
-      500
-    );
+    return jsonResponse({ error: "OPENAI_API_KEY não configurada na Netlify.", error_type: "internal_error" }, 500);
   }
 
   const size = normalizeSize(body.size);
   const quality = normalizeQuality(body.quality);
   const moduleName = cleanText(body.module, DEFAULT_MODULE);
   const enrichedPrompt = enrichPrompt(prompt);
+  const startedAt = Date.now();
 
+  console.log(`[generate-image] Inicio da geracao | modulo=${moduleName} | size=${size} | quality=${quality}`);
+
+  let timeoutId;
   try {
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${openAiKey}`,
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model: "dall-e-3",
         prompt: enrichedPrompt,
-        quality,
         size,
-        n: 1,
+        quality,
+        style: "natural",
         response_format: "url",
+        n: 1,
       }),
     });
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const errorMessage =
-        payload?.error?.message || payload?.message || "Não foi possível gerar imagem na OpenAI agora.";
-      return jsonResponse({ error: errorMessage }, 502);
+      const errorMessage = payload?.error?.message || payload?.message || "Não foi possível gerar imagem na OpenAI agora.";
+      console.error(`[generate-image] Erro OpenAI | status=${response.status} | detalhe=${errorMessage}`);
+      console.log(`[generate-image] Tempo total da requisicao: ${Date.now() - startedAt}ms`);
+      return jsonResponse({ error: errorMessage, error_type: "openai_error" }, 502);
     }
 
     const imageData = Array.isArray(payload?.data) ? payload.data[0] : null;
     const imageUrl = cleanText(imageData?.url);
     if (!imageUrl) {
-      return jsonResponse({ error: "A resposta da OpenAI não trouxe uma URL de imagem válida." }, 502);
+      console.error("[generate-image] Erro OpenAI | resposta sem URL de imagem valida.");
+      console.log(`[generate-image] Tempo total da requisicao: ${Date.now() - startedAt}ms`);
+      return jsonResponse({ error: "A resposta da OpenAI não trouxe uma URL de imagem válida.", error_type: "openai_error" }, 502);
     }
 
+    console.log(`[generate-image] Tempo total da requisicao: ${Date.now() - startedAt}ms`);
     return jsonResponse({
       image_url: imageUrl,
       expires_in: IMAGE_EXPIRES_IN,
@@ -138,7 +147,23 @@ export default async function handler(request) {
       quality,
     });
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error(`[generate-image] Erro timeout | OpenAI ultrapassou ${OPENAI_TIMEOUT_MS}ms.`);
+      console.log(`[generate-image] Tempo total da requisicao: ${Date.now() - startedAt}ms`);
+      return jsonResponse(
+        {
+          error: "A geração demorou mais do que o esperado.",
+          error_type: "timeout_openai",
+        },
+        504
+      );
+    }
+
     const message = error instanceof Error ? error.message : "Erro inesperado ao gerar imagem.";
-    return jsonResponse({ error: message }, 500);
+    console.error(`[generate-image] Erro inesperado | detalhe=${message}`);
+    console.log(`[generate-image] Tempo total da requisicao: ${Date.now() - startedAt}ms`);
+    return jsonResponse({ error: message, error_type: "internal_error" }, 500);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }

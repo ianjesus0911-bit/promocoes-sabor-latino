@@ -348,6 +348,8 @@ const IMAGE_HISTORY_LIMIT = 10;
 const IMAGE_LINK_EXPIRATION_MS = 60 * 60 * 1000;
 const IMAGE_GENERATION_ERROR_MESSAGE =
   "Não foi possível gerar a imagem agora. Tente novamente ou use o prompt no Canva, ChatGPT ou Leonardo.";
+const IMAGE_TIMEOUT_ERROR_MESSAGE =
+  "A geração demorou mais do que o esperado. Tente novamente ou copie o prompt para usar no Canva, ChatGPT ou Leonardo.";
 const IMAGE_COST_NOTE = "Cada imagem gerada tem um custo aproximado de $0.04. Use com intenção.";
 const FEED_VERTICAL_NOTICE =
   "A imagem foi gerada em formato vertical próximo ao 4:5. Se quiser ajuste exato, recorte no Canva.";
@@ -2717,6 +2719,9 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
 
       const apiPayload = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (response.status === 504 || apiPayload?.error_type === "timeout_openai") {
+          throw new Error("__IMAGE_TIMEOUT__");
+        }
         throw new Error(typeof apiPayload?.error === "string" ? apiPayload.error : IMAGE_GENERATION_ERROR_MESSAGE);
       }
 
@@ -2781,12 +2786,15 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
       });
     } catch (error) {
       console.error("Erro ao gerar imagem real:", error);
+      const isTimeoutError =
+        String(error instanceof Error ? error.message : "").includes("__IMAGE_TIMEOUT__") ||
+        String(error instanceof Error ? error.message : "").toLowerCase().includes("abort");
       setImageGenerationByModule((current) => ({
         ...current,
         [moduleId]: {
           ...(current[moduleId] || {}),
           loading: false,
-          error: IMAGE_GENERATION_ERROR_MESSAGE,
+          error: isTimeoutError ? IMAGE_TIMEOUT_ERROR_MESSAGE : IMAGE_GENERATION_ERROR_MESSAGE,
           result: null,
           promptUsed: promptWithContext,
           requestPayload,
@@ -2862,7 +2870,7 @@ Cena 3 (5-8s): CTA direto para WhatsApp ${whatsapp}.`;
         {moduleState.loading ? (
           <div className="image-loading-state">
             <p className="hint">Gerando sua imagem...</p>
-            <p className="hint">Isso leva cerca de 10 a 20 segundos...</p>
+            <p className="hint">A geração pode levar até 25 segundos. Aguarde sem fechar a tela.</p>
           </div>
         ) : null}
 
